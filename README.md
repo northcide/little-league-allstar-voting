@@ -8,23 +8,26 @@ controls.
 ## Features
 
 - **Admin** creates named elections (e.g., "Majors International"), sets the
-  player roster, configures any number of rounds with custom *picks per coach*
-  and *picks to lock per round*, generates a list of memorable single-word codes
-  to hand to each coach.
+  player roster, sets a target roster size, and generates a list of memorable
+  single-word codes to hand to each coach.
+- **Dynamic rounds**: rounds are created one at a time. Each time the admin
+  clicks **Start Next Round**, they enter that round's *Picks per coach* and
+  *Picks to lock* — defaults match the previous round. There's no upfront
+  round configuration and no preset number of rounds. The admin decides when
+  to keep going and when to **Finalize All Rounds**.
 - **Coach** logs in with the election code + their word, picks players each
   round (multi-select, no ranking), and submits. Submitted ballots are locked
   unless the admin resets them.
 - **Live admin dashboard** (2-second polling): expected voters, # logged in, #
   submitted this round, # outstanding, plus a per-code badge grid.
 - **Locked players** from prior rounds appear inline in the next ballot, grayed
-  out and unselectable.
+  out and unselectable. The ballot is grouped by round so coaches see which
+  players were locked in each round.
 - **Coach result view** shows the round's winners and a tie-at-cutoff flag. No
-  raw vote counts are shown to coaches. Locked players display the round they
-  were locked in (`RD1 🔒`, `RD2 🔒`, …). Unlocked players that were tied at the
+  raw vote counts are shown to coaches. Unlocked players that were tied at the
   cutoff in the most recent finalized round get a `⚖ TIED` indicator so coaches
   know who's still in play.
 - **Admin result view** shows the full tally with vote counts per player.
-- **Tiebreak rounds** can be added on the fly after the configured rounds.
 - **Admin overrides**: reset a coach's ballot, force-finalize a round, edit the
   locked players post-finalize, manually lock/unlock a player, revoke a code.
 
@@ -99,7 +102,7 @@ who got which word.
 | A coach voted by mistake and wants to re-vote | Overrides → "Reset a coach's ballot" |
 | A coach lost their cookie / switched devices | They re-enter the same word; session resumes |
 | One coach can't make it; you want to finalize anyway | On dashboard, click "Force-Finalize (n/N)" |
-| Round tied at the cutoff | Dashboard shows the tie banner; click "+ Add Tiebreak Round" |
+| Round tied at the cutoff | Click "Start Next Round" again — pick a tighter Pick/Lock (e.g., Pick 1, Lock 1) to resolve between the tied players |
 | You want to manually pick the locked players | Results page → "Edit locked players (override)" |
 | Add a player mid-election to the locked roster | Overrides → "Lock in" next to the player |
 | A coach lost / shared their code | Voter Codes → Revoke their word |

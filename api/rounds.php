@@ -10,11 +10,14 @@ try {
     $eid = currentAdminElectionId();
     if (!$eid) jsonError('No election selected', 400);
 
-    // ── Start next round ──────────────────────────────────────────────────────
+    // ── Start next round (creates a new round on-demand with admin-supplied config) ──
     if ($action === 'start_next') {
-        $in       = getInput();
-        $newPpc   = isset($in['picks_per_coach']) ? (int)$in['picks_per_coach'] : null;
-        $newPtl   = isset($in['picks_to_lock'])   ? (int)$in['picks_to_lock']   : null;
+        $in  = getInput();
+        $ppc = (int)($in['picks_per_coach'] ?? 0);
+        $ptl = (int)($in['picks_to_lock']   ?? 0);
+        if ($ppc < 1 || $ptl < 1 || $ptl > $ppc) {
+            jsonError('picks_per_coach and picks_to_lock are required, must be ≥1, with picks_to_lock ≤ picks_per_coach');
+        }
 
         $db->beginTransaction();
         try {
@@ -39,53 +42,29 @@ try {
                 }
             }
 
-            // Find next pending round (or fail and tell caller to add a tiebreak)
-            $nxt = $db->prepare("SELECT * FROM rounds WHERE election_id=? AND state='pending' ORDER BY round_num LIMIT 1");
-            $nxt->execute([$eid]);
-            $r = $nxt->fetch();
-            if (!$r) {
-                $db->rollBack();
-                jsonError('No pending rounds. Add a tiebreak round if you need one.', 409);
-            }
-
-            // Apply admin overrides to picks_per_coach / picks_to_lock if provided
-            if ($newPpc !== null || $newPtl !== null) {
-                $effPpc = $newPpc ?? (int)$r['picks_per_coach'];
-                $effPtl = $newPtl ?? (int)$r['picks_to_lock'];
-                if ($effPpc < 1 || $effPtl < 1 || $effPtl > $effPpc) {
-                    $db->rollBack();
-                    jsonError('picks_per_coach and picks_to_lock must be ≥1, with picks_to_lock ≤ picks_per_coach');
-                }
-                $db->prepare("UPDATE rounds SET picks_per_coach=?, picks_to_lock=? WHERE id=?")
-                   ->execute([$effPpc, $effPtl, (int)$r['id']]);
-                $r['picks_per_coach'] = $effPpc;
-                $r['picks_to_lock']   = $effPtl;
-                audit($db, $eid, 'admin', 'override_round_config', [
-                    'round_num' => (int)$r['round_num'],
-                    'picks_per_coach' => $effPpc,
-                    'picks_to_lock' => $effPtl,
-                ]);
-            }
-
-            // Sanity: enough eligible players remain
+            // Sanity: enough eligible players remain, and roster has room
             $lockedCount = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid}")->fetchColumn();
             $totalActive = (int)$db->query("SELECT COUNT(*) FROM players WHERE election_id={$eid} AND active=1")->fetchColumn();
             $remaining   = $totalActive - $lockedCount;
-            if ($remaining < (int)$r['picks_per_coach']) {
+            if ($remaining < $ppc) {
                 $db->rollBack();
-                jsonError("Only {$remaining} unlocked players remain; round needs {$r['picks_per_coach']} picks per coach", 409);
+                jsonError("Only {$remaining} unlocked players remain; round needs {$ppc} picks per coach", 409);
             }
             $slotsRemaining = (int)$e['max_roster_size'] - $lockedCount;
             if ($slotsRemaining <= 0) {
                 $db->rollBack();
-                jsonError("Roster is already full ({$lockedCount}/{$e['max_roster_size']}). You can complete the election.", 409);
+                jsonError("Roster is already full ({$lockedCount}/{$e['max_roster_size']}). You can finalize all rounds now.", 409);
             }
 
-            $db->prepare("UPDATE rounds SET state='active' WHERE id=?")->execute([$r['id']]);
-            $db->prepare("UPDATE elections SET current_round=? WHERE id=?")->execute([$r['round_num'], $eid]);
-            audit($db, $eid, 'admin', 'start_round', ['round_num' => $r['round_num']]);
+            // Create the round at MAX(round_num)+1 and activate it
+            $nextRn = ((int)$db->query("SELECT COALESCE(MAX(round_num),0) FROM rounds WHERE election_id={$eid}")->fetchColumn()) + 1;
+            $ins = $db->prepare("INSERT INTO rounds (election_id, round_num, picks_per_coach, picks_to_lock, state) VALUES (?,?,?,?,'active')");
+            $ins->execute([$eid, $nextRn, $ppc, $ptl]);
+            $newId = (int)$db->lastInsertId();
+            $db->prepare("UPDATE elections SET current_round=? WHERE id=?")->execute([$nextRn, $eid]);
+            audit($db, $eid, 'admin', 'start_round', ['round_num' => $nextRn, 'picks_per_coach' => $ppc, 'picks_to_lock' => $ptl]);
             $db->commit();
-            jsonResponse(['ok' => true, 'round_id' => (int)$r['id'], 'round_num' => (int)$r['round_num']]);
+            jsonResponse(['ok' => true, 'round_id' => $newId, 'round_num' => $nextRn]);
         } catch (Throwable $ex) {
             if ($db->inTransaction()) $db->rollBack();
             throw $ex;
@@ -211,27 +190,6 @@ try {
             if ($db->inTransaction()) $db->rollBack();
             throw $ex;
         }
-    }
-
-    // ── Add a tiebreak round ──────────────────────────────────────────────────
-    if ($action === 'add_tiebreak') {
-        $d   = getInput();
-        $ppc = (int)($d['picks_per_coach'] ?? 0);
-        $ptl = (int)($d['picks_to_lock']   ?? 0);
-        if ($ppc < 1 || $ptl < 1 || $ptl > $ppc) jsonError('Bad tiebreak config');
-
-        // Clamp lock count to remaining roster slots
-        $maxRoster      = (int)$db->query("SELECT max_roster_size FROM elections WHERE id={$eid}")->fetchColumn();
-        $lockedCount    = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid}")->fetchColumn();
-        $slotsRemaining = max(0, $maxRoster - $lockedCount);
-        if ($slotsRemaining === 0) jsonError("Roster is already full ({$lockedCount}/{$maxRoster})", 409);
-        if ($ptl > $slotsRemaining) $ptl = $slotsRemaining;
-
-        $maxNum = (int)$db->query("SELECT COALESCE(MAX(round_num),0) FROM rounds WHERE election_id={$eid}")->fetchColumn();
-        $ins = $db->prepare("INSERT INTO rounds (election_id, round_num, picks_per_coach, picks_to_lock, is_tiebreak, state) VALUES (?,?,?,?,1,'pending')");
-        $ins->execute([$eid, $maxNum + 1, $ppc, $ptl]);
-        audit($db, $eid, 'admin', 'add_tiebreak', ['round_num' => $maxNum + 1, 'picks_per_coach' => $ppc, 'picks_to_lock' => $ptl]);
-        jsonResponse(['id' => (int)$db->lastInsertId(), 'round_num' => $maxNum + 1]);
     }
 
     // ── Reset a coach's ballot for the current/active round ───────────────────

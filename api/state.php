@@ -86,7 +86,6 @@ try {
                 'picks_per_coach'   => (int)$round['picks_per_coach'],
                 'picks_to_lock'     => (int)$round['picks_to_lock'],
                 'state'             => $round['state'],
-                'is_tiebreak'       => (bool)$round['is_tiebreak'],
                 'has_tie_at_cutoff' => (bool)$round['has_tie_at_cutoff'],
             ];
 
@@ -136,7 +135,7 @@ try {
 
         $players = $db->prepare("SELECT id, name, jersey, sort_order, active FROM players WHERE election_id=? ORDER BY sort_order, name");
         $players->execute([$eid]);
-        $rounds  = $db->prepare("SELECT id, round_num, picks_per_coach, picks_to_lock, is_tiebreak, state, has_tie_at_cutoff, tie_player_ids_json, finalized_at FROM rounds WHERE election_id=? ORDER BY round_num");
+        $rounds  = $db->prepare("SELECT id, round_num, picks_per_coach, picks_to_lock, state, has_tie_at_cutoff, tie_player_ids_json, finalized_at FROM rounds WHERE election_id=? ORDER BY round_num");
         $rounds->execute([$eid]);
         $locked  = $db->prepare("SELECT player_id, locked_in_round FROM locked_roster WHERE election_id=? ORDER BY locked_in_round, player_id");
         $locked->execute([$eid]);

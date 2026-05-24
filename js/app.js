@@ -332,7 +332,7 @@
 
     // Header strip
     const headerBits = [
-      h('span', { class: 'round-num' }, round.is_tiebreak ? `Tiebreak R${round.round_num}` : `Round ${round.round_num}`),
+      h('span', { class: 'round-num' }, `Round ${round.round_num}`),
       h('span', { class: 'sep' }, '·'),
       h('span', {}, `Pick ${round.picks_per_coach}`),
       h('span', { class: 'sep' }, '·'),
@@ -346,7 +346,7 @@
       const result = h('div', { class: 'results-card' },
         h('h2', {}, `Round ${round.round_num} Results`),
         round.has_tie_at_cutoff
-          ? h('div', { class: 'tie-note' }, '⚠ Tie at cutoff. The admin will run a tiebreak round.')
+          ? h('div', { class: 'tie-note' }, '⚠ Tie at cutoff. The admin may start another round to break it.')
           : null,
         h('h3', {}, 'Locked in this round'),
         h('div', { class: 'winners-list' },
@@ -677,22 +677,30 @@
     const e = s.election;
     const cr = s.current_round;
     const counts = s.counts || {};
-    const nextPending = (s.rounds || []).find(r => r.state === 'pending');
     const rootEl = h('div', {});
 
     rootEl.append(
       h('div', { class: 'page-h' },
         h('h2', {}, e.name),
         h('div', { class: 'page-actions' },
-          e.status === 'setup' ? h('button', { class: 'btn btn-success', onclick: () => activateElection() }, '▶ Activate Election') : null,
-          e.status === 'active' && cr && cr.state === 'pending' ? h('button', { class: 'btn btn-primary', onclick: () => startNext(cr) }, `▶ Start Round ${cr.round_num}`) : null,
-          e.status === 'active' && cr && cr.state === 'finalized' && nextPending ? h('button', { class: 'btn btn-primary', onclick: () => startNext(nextPending) }, `▶ Start Round ${nextPending.round_num}`) : null,
-          e.status === 'active' && cr && (cr.state === 'active' || cr.state === 'all_submitted') ? h('button', {
-            class: `btn ${cr.state === 'all_submitted' ? 'btn-success' : 'btn-warning'}`,
-            onclick: () => finalizeRound(cr, cr.state !== 'all_submitted')
-          }, cr.state === 'all_submitted' ? '✓ Finalize Round' : `⚠ Force-Finalize (only ${counts.submitted}/${counts.expected})`) : null,
-          e.status === 'active' && allRoundsFinalized(s) ? h('button', { class: 'btn btn-primary', onclick: addTiebreak }, '+ Add Tiebreak Round') : null,
-          e.status === 'active' && allRoundsFinalized(s) ? h('button', { class: 'btn btn-secondary', onclick: completeElection }, 'Complete election') : null,
+          (() => {
+            if (e.status === 'setup') {
+              return h('button', { class: 'btn btn-success', onclick: () => activateElection() }, '▶ Activate Election');
+            }
+            if (e.status !== 'active') return null;
+            // Active round in progress → Finalize
+            if (cr && (cr.state === 'active' || cr.state === 'all_submitted')) {
+              return h('button', {
+                class: `btn ${cr.state === 'all_submitted' ? 'btn-success' : 'btn-warning'}`,
+                onclick: () => finalizeRound(cr, cr.state !== 'all_submitted'),
+              }, cr.state === 'all_submitted' ? '✓ Finalize Round' : `⚠ Force-Finalize (only ${counts.submitted}/${counts.expected})`);
+            }
+            // No active round (either no rounds yet or latest is finalized) → Start Next + Finalize All
+            return null;
+          })(),
+          // Between-rounds buttons: start another or finalize the election
+          e.status === 'active' && (!cr || cr.state === 'finalized') ? h('button', { class: 'btn btn-primary', onclick: () => startNext(cr) }, '▶ Start Next Round') : null,
+          e.status === 'active' && (!cr || cr.state === 'finalized') ? h('button', { class: 'btn btn-secondary', onclick: completeElection }, '✓ Finalize All Rounds') : null,
         ),
       ),
 
@@ -709,7 +717,7 @@
       // Current round block
       cr ? h('div', { class: 'panel current-round' },
         h('div', { class: 'panel-h' },
-          h('h3', {}, `${cr.is_tiebreak ? 'Tiebreak ' : ''}Round ${cr.round_num}`),
+          h('h3', {}, `Round ${cr.round_num}`),
           h('span', { class: `pill pill-${cr.state}` }, cr.state.replace('_', ' ')),
           h('span', { class: 'micro' }, `Pick ${cr.picks_per_coach}, lock ${cr.picks_to_lock}`),
         ),
@@ -869,11 +877,14 @@
         ) : null,
       ),
 
-      // Rounds
+      // Rounds (history) — populated dynamically as rounds run
       h('div', { class: 'panel' },
         h('div', { class: 'panel-h' }, h('h3', {}, 'Rounds')),
-        renderRoundsTable(s.rounds || [], inSetup),
-        inSetup ? h('button', { class: 'btn btn-secondary btn-sm', onclick: editRoundsPrompt }, 'Edit round configuration') : null,
+        (s.rounds && s.rounds.length)
+          ? renderRoundsTable(s.rounds, inSetup)
+          : h('div', { class: 'muted' }, inSetup
+              ? 'No rounds yet. Activate the election, then start the first round when you\'re ready.'
+              : 'No rounds yet. Click "Start Next Round" above.'),
       ),
     );
 
@@ -998,75 +1009,15 @@
     if (!rounds.length) return h('div', { class: 'muted' }, 'No rounds.');
     return h('table', { class: 'tbl' },
       h('thead', {}, h('tr', {},
-        h('th', {}, '#'), h('th', {}, 'Pick'), h('th', {}, 'Lock'), h('th', {}, 'Type'), h('th', {}, 'State'),
+        h('th', {}, '#'), h('th', {}, 'Pick'), h('th', {}, 'Lock'), h('th', {}, 'State'),
       )),
       h('tbody', {}, ...rounds.map(r => h('tr', {},
         h('td', {}, String(r.round_num)),
         h('td', {}, String(r.picks_per_coach)),
         h('td', {}, String(r.picks_to_lock)),
-        h('td', {}, r.is_tiebreak ? 'tiebreak' : 'main'),
         h('td', {}, h('span', { class: `pill pill-${r.state}` }, r.state.replace('_', ' '))),
       )))
     );
-  }
-
-  function editRoundsPrompt() {
-    const cur = (S.state.rounds || []).map(r => ({ picks_per_coach: r.picks_per_coach, picks_to_lock: r.picks_to_lock }));
-    const cap = (S.state.election && S.state.election.max_roster_size) || 0;
-    const overlay = h('div', { class: 'overlay' });
-    const rows = h('div', { class: 'rounds-edit' });
-    const lockTotal = h('div', { class: 'lock-total muted' }, '');
-    function refreshLockTotal() {
-      const sum = cur.reduce((s, r) => s + (parseInt(r.picks_to_lock, 10) || 0), 0);
-      lockTotal.textContent = `Total locks across rounds: ${sum} / ${cap}`;
-      lockTotal.className = 'lock-total ' + (sum === cap ? 'muted' : 'warn');
-    }
-    function row(r, idx) {
-      const ppc = h('input', { type: 'number', min: 1, value: r.picks_per_coach });
-      const ptl = h('input', { type: 'number', min: 1, value: r.picks_to_lock });
-      ppc.addEventListener('input', () => { r.picks_per_coach = parseInt(ppc.value, 10) || 1; refreshLockTotal(); });
-      ptl.addEventListener('input', () => { r.picks_to_lock   = parseInt(ptl.value, 10) || 1; refreshLockTotal(); });
-      const rm  = h('button', { class: 'btn btn-sm btn-danger-outline', onclick: () => { cur.splice(idx, 1); redraw(); } }, '×');
-      return h('div', { class: 'rounds-edit-row' },
-        h('span', {}, `R${idx + 1}`),
-        h('label', {}, 'Pick'), ppc,
-        h('label', {}, 'Lock'), ptl,
-        rm,
-      );
-    }
-    function redraw() {
-      clear(rows);
-      cur.forEach((r, i) => {
-        const el = row(r, i);
-        rows.append(el);
-      });
-      refreshLockTotal();
-    }
-    redraw();
-    overlay.append(h('div', { class: 'modal modal-lg' },
-      h('h3', {}, 'Edit rounds'),
-      h('p', {}, 'Configure how many picks per coach and how many players get locked in each round. Only available while in setup.'),
-      rows,
-      h('button', { class: 'btn btn-secondary btn-sm', onclick: () => { cur.push({ picks_per_coach: 1, picks_to_lock: 1 }); redraw(); } }, '+ Add round'),
-      lockTotal,
-      h('div', { class: 'modal-actions' },
-        h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Cancel'),
-        h('button', { class: 'btn btn-primary', onclick: async () => {
-          // Read current DOM values
-          const inputs = $$('input', rows);
-          const out = [];
-          for (let i = 0; i < cur.length; i++) {
-            out.push({
-              picks_per_coach: parseInt(inputs[i*2].value, 10),
-              picks_to_lock:   parseInt(inputs[i*2+1].value, 10),
-            });
-          }
-          try { await api('elections', 'update_rounds', { id: S.state.election.id, rounds: out }); overlay.remove(); pollOnce(); }
-          catch (e) { toast(e.message, 'error'); }
-        } }, 'Save'),
-      )
-    ));
-    document.body.append(overlay);
   }
 
   // ── Admin: Results ────────────────────────────────────────────────────────
@@ -1083,7 +1034,7 @@
     for (const r of finalRounds) {
       const block = h('div', { class: 'panel' });
       block.append(h('div', { class: 'panel-h' },
-        h('h3', {}, `${r.is_tiebreak ? 'Tiebreak ' : ''}Round ${r.round_num}`),
+        h('h3', {}, `Round ${r.round_num}`),
         h('span', { class: `pill pill-${r.state}` }, r.state.replace('_', ' ')),
         r.has_tie_at_cutoff ? h('span', { class: 'pill pill-warn' }, '⚠ tie at cutoff') : null,
       ));
@@ -1144,7 +1095,7 @@
     );
     overlay.append(h('div', { class: 'modal modal-lg' },
       h('h3', {}, `Override locked players — Round ${r.round_num}`),
-      h('p', { class: 'micro' }, `Select up to ${ptl} players (or any number you choose for tiebreak resolution).`),
+      h('p', { class: 'micro' }, `Select up to ${ptl} players (or any number you choose for override resolution).`),
       list,
       h('div', { class: 'modal-actions' },
         h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Cancel'),
@@ -1226,10 +1177,13 @@
     try { await api('elections', 'activate', { id: S.state.election.id }); pollOnce(); toast('Activated.', 'success'); }
     catch (e) { toast(e.message, 'error'); }
   }
-  function startNext(round) {
+  function startNext(prevRound) {
+    const nextRn = (prevRound && prevRound.round_num ? prevRound.round_num : 0) + 1;
+    const defPpc = prevRound && prevRound.picks_per_coach ? prevRound.picks_per_coach : 4;
+    const defPtl = prevRound && prevRound.picks_to_lock   ? prevRound.picks_to_lock   : 2;
     const overlay = h('div', { class: 'overlay' });
-    const ppc = h('input', { type: 'number', min: 1, value: round.picks_per_coach });
-    const ptl = h('input', { type: 'number', min: 1, value: round.picks_to_lock });
+    const ppc = h('input', { type: 'number', min: 1, value: defPpc });
+    const ptl = h('input', { type: 'number', min: 1, value: defPtl });
     const submit = async () => {
       const a = parseInt(ppc.value, 10), b = parseInt(ptl.value, 10);
       if (!(a >= 1) || !(b >= 1) || b > a) { toast('Lock must be ≥1 and ≤ Pick', 'error'); return; }
@@ -1241,15 +1195,17 @@
       } catch (e) { toast(e.message, 'error'); }
     };
     overlay.append(h('div', { class: 'modal' },
-      h('h3', {}, `Start Round ${round.round_num}`),
-      h('p', { class: 'muted' }, 'Confirm or adjust the picks for this round.'),
+      h('h3', {}, `Start Round ${nextRn}`),
+      h('p', { class: 'muted' }, prevRound
+        ? 'Defaults below match the previous round — adjust as needed.'
+        : 'Set how many picks each coach makes and how many of them will be locked in.'),
       h('div', { class: 'form-grid' },
         h('label', {}, 'Picks per coach'), ppc,
         h('label', {}, 'Picks to lock'),   ptl,
       ),
       h('div', { class: 'modal-actions' },
         h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Cancel'),
-        h('button', { class: 'btn btn-primary', onclick: submit }, `▶ Start Round ${round.round_num}`),
+        h('button', { class: 'btn btn-primary', onclick: submit }, `▶ Start Round ${nextRn}`),
       )
     ));
     document.body.append(overlay);
@@ -1263,31 +1219,13 @@
         try {
           const r = await api('rounds', 'finalize', { round_id: cr.id, override: !!force });
           pollOnce();
-          if (r.tie) toast('Finalized with a tie at cutoff — consider a tiebreak round.', 'warn', 6000);
+          if (r.tie) toast('Finalized with a tie at cutoff — start another round if you want to break it.', 'warn', 6000);
           else      toast('Round finalized.', 'success');
         } catch (e) { toast(e.message, 'error'); }
       }, force ? 'Force-finalize' : 'Finalize', !!force);
   }
-  function addTiebreak() {
-    const overlay = h('div', { class: 'overlay' });
-    const ppc = h('input', { type: 'number', min: 1, value: 1 });
-    const ptl = h('input', { type: 'number', min: 1, value: 1 });
-    overlay.append(h('div', { class: 'modal' },
-      h('h3', {}, 'Add tiebreak round'),
-      h('label', {}, 'Picks per coach'), ppc,
-      h('label', {}, 'Picks to lock'), ptl,
-      h('div', { class: 'modal-actions' },
-        h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Cancel'),
-        h('button', { class: 'btn btn-primary', onclick: async () => {
-          try { await api('rounds', 'add_tiebreak', { picks_per_coach: parseInt(ppc.value,10), picks_to_lock: parseInt(ptl.value,10) }); overlay.remove(); pollOnce(); }
-          catch (e) { toast(e.message, 'error'); }
-        } }, 'Add'),
-      )
-    ));
-    document.body.append(overlay);
-  }
   function completeElection() {
-    confirmDialog('Complete election?', 'Mark this election as complete. Coaches will keep their access but no new rounds can be started.',
+    confirmDialog('Finalize all rounds?', 'Mark this election as complete. Coaches will keep their access but no new rounds can be started.',
       async () => { try { await api('rounds', 'complete_election', {}); pollOnce(); } catch (e) { toast(e.message, 'error'); } });
   }
 
@@ -1298,38 +1236,6 @@
     const code = h('input', { placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off' });
     const exp  = h('input', { type: 'number', min: 1, value: 12 });
     const maxRoster = h('input', { type: 'number', min: 1, max: 100, value: 12 });
-    const lockTotal = h('div', { class: 'lock-total muted' }, '');
-    function refreshLockTotal() {
-      const sum = rounds.reduce((s, r) => s + (parseInt(r.picks_to_lock, 10) || 0), 0);
-      const cap = parseInt(maxRoster.value, 10) || 0;
-      lockTotal.textContent = `Total locks across rounds: ${sum} / ${cap}`;
-      lockTotal.className = 'lock-total ' + (sum === cap ? 'muted' : 'warn');
-    }
-    maxRoster.addEventListener('input', refreshLockTotal);
-    const roundsList = h('div', { class: 'rounds-edit' });
-    const rounds = [
-      { picks_per_coach: 4, picks_to_lock: 2 },
-      { picks_per_coach: 3, picks_to_lock: 1 },
-    ];
-    function drawRounds() {
-      clear(roundsList);
-      rounds.forEach((r, i) => {
-        const ppc = h('input', { type: 'number', min: 1, value: r.picks_per_coach });
-        const ptl = h('input', { type: 'number', min: 1, value: r.picks_to_lock });
-        ppc.addEventListener('change', () => { r.picks_per_coach = parseInt(ppc.value, 10) || 1; refreshLockTotal(); });
-        ptl.addEventListener('change', () => { r.picks_to_lock   = parseInt(ptl.value, 10) || 1; refreshLockTotal(); });
-        const rm = h('button', { class: 'btn btn-sm btn-danger-outline', onclick: () => { rounds.splice(i, 1); drawRounds(); refreshLockTotal(); } }, '×');
-        roundsList.append(h('div', { class: 'rounds-edit-row' },
-          h('span', {}, `R${i + 1}`),
-          h('label', {}, 'Pick'), ppc,
-          h('label', {}, 'Lock'), ptl,
-          rm,
-        ));
-      });
-      refreshLockTotal();
-    }
-    drawRounds();
-
     const players = h('textarea', { rows: 8, placeholder: 'Optional: one player per line ("Name, Jersey")' });
 
     overlay.append(h('div', { class: 'modal modal-lg' },
@@ -1340,10 +1246,8 @@
         h('label', {}, 'Expected voters'), exp,
         h('label', {}, 'Max roster size'), maxRoster,
       ),
-      h('div', { class: 'sep' }, 'Rounds'),
-      roundsList,
-      h('button', { class: 'btn btn-secondary btn-sm', onclick: () => { rounds.push({ picks_per_coach: 1, picks_to_lock: 1 }); drawRounds(); } }, '+ Add round'),
-      lockTotal,
+      h('p', { class: 'muted', style: { marginTop: '10px' } },
+        'Rounds are configured one at a time as you run them — you\'ll set Picks per coach and Picks to lock when you click "Start Next Round". Run as many rounds as you need until the roster is full or you choose to finalize.'),
       h('div', { class: 'sep' }, 'Players (optional — can add later)'),
       players,
       h('div', { class: 'modal-actions' },
@@ -1359,7 +1263,6 @@
               vote_code: code.value.trim().toLowerCase(),
               expected_voters: parseInt(exp.value, 10) || 0,
               max_roster_size: parseInt(maxRoster.value, 10) || 12,
-              rounds,
               players: playerList,
             });
             overlay.remove();

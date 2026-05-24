@@ -45,7 +45,6 @@ CREATE TABLE IF NOT EXISTS rounds (
   round_num               INT NOT NULL,
   picks_per_coach         INT NOT NULL,
   picks_to_lock           INT NOT NULL,
-  is_tiebreak             TINYINT(1) NOT NULL DEFAULT 0,
   state                   ENUM('pending','active','all_submitted','finalized') NOT NULL DEFAULT 'pending',
   finalized_at            DATETIME DEFAULT NULL,
   finalized_by_override   TINYINT(1) NOT NULL DEFAULT 0,
