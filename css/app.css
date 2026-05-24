@@ -444,6 +444,15 @@ textarea:focus { outline: none; border-color: var(--accent); }
 /* Copy coach link button in dashboard header */
 .copy-link { margin-left: 12px; vertical-align: middle; font-weight: 600; }
 
+/* Coach ID input — compact, centered, big readable text */
+.coach-id-input {
+  width: 110px;
+  font-size: 22px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 1px;
+}
+
 /* Rounds edit */
 .rounds-edit { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
 .rounds-edit-row { display: flex; align-items: center; gap: 8px; padding: 8px; background: var(--bg3); border-radius: var(--radius-sm); }
