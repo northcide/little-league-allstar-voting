@@ -205,10 +205,9 @@
     try {
       const list = await api('elections', 'list');
       const overlay = h('div', { class: 'overlay' });
-      const m = h('div', { class: 'modal' },
-        h('h3', {}, 'Switch election'),
-        h('div', { class: 'elist' }, ...list.elections.map(e =>
-          h('div', { class: 'elist-row', onclick: async () => {
+      const renderList = (elections) => h('div', { class: 'elist' }, ...elections.map(e =>
+        h('div', { class: 'elist-row' },
+          h('div', { class: 'elist-main', onclick: async () => {
             await api('elections', 'select', { id: e.id });
             overlay.remove(); pollOnce();
           } },
@@ -216,8 +215,25 @@
             h('div', { class: 'elist-meta' },
               h('span', { class: `pill pill-${e.status}` }, e.status),
               ` · code: ${e.vote_code} · ${e.player_count} players · ${e.code_count} codes`),
-          )
-        )),
+          ),
+          h('div', { class: 'elist-actions' },
+            e.status !== 'archived' ? h('button', {
+              class: 'btn btn-sm btn-secondary',
+              onclick: (ev) => { ev.stopPropagation(); archiveElectionFromList(e, overlay); },
+              title: 'Archive (keep data, mark as done)',
+            }, 'Archive') : null,
+            h('button', {
+              class: 'btn btn-sm btn-danger-outline',
+              onclick: (ev) => { ev.stopPropagation(); deleteElectionFromList(e, overlay); },
+              title: 'Delete permanently (cannot be undone)',
+            }, 'Delete'),
+          ),
+        )
+      ));
+      const listEl = renderList(list.elections);
+      const m = h('div', { class: 'modal modal-lg' },
+        h('h3', {}, 'Switch election'),
+        listEl,
         h('div', { class: 'modal-actions' },
           h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Close'),
           h('button', { class: 'btn btn-primary', onclick: () => { overlay.remove(); openCreateElection(); } }, '+ New election'),
@@ -226,6 +242,37 @@
       overlay.append(m);
       document.body.append(overlay);
     } catch (e) { toast(e.message, 'error'); }
+  }
+
+  function archiveElectionFromList(e, overlay) {
+    confirmDialog(`Archive "${e.name}"?`, 'Archived elections stay in the database but coaches can no longer log in to them. You can hard-delete them later if you want them gone entirely.',
+      async () => {
+        try { await api('elections', 'archive', { id: e.id }); overlay.remove(); switchElection(); toast('Archived.', 'success'); }
+        catch (err) { toast(err.message, 'error'); }
+      }, 'Archive');
+  }
+
+  function deleteElectionFromList(e, overlay) {
+    const dlg = h('div', { class: 'overlay' });
+    const confirmInput = h('input', { placeholder: e.name, autocomplete: 'off' });
+    const submit = async () => {
+      try {
+        await api('elections', 'delete', { id: e.id, confirm_name: confirmInput.value });
+        dlg.remove(); overlay.remove(); switchElection(); toast(`Deleted "${e.name}".`, 'success');
+      } catch (err) { toast(err.message, 'error'); }
+    };
+    dlg.append(h('div', { class: 'modal' },
+      h('h3', {}, `Delete "${e.name}"?`),
+      h('p', {}, 'This permanently removes the election and all of its players, voter codes, ballots, rounds, and locked roster. ', h('strong', {}, 'This cannot be undone.')),
+      h('p', { class: 'muted', style: { marginTop: '8px' } }, 'To confirm, type the election name exactly:'),
+      confirmInput,
+      h('div', { class: 'modal-actions' },
+        h('button', { class: 'btn btn-secondary', onclick: () => dlg.remove() }, 'Cancel'),
+        h('button', { class: 'btn btn-danger', onclick: submit }, 'Delete permanently'),
+      ),
+    ));
+    document.body.append(dlg);
+    setTimeout(() => confirmInput.focus(), 50);
   }
 
   // ── Login view ─────────────────────────────────────────────────────────────

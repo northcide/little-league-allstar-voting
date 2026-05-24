@@ -139,6 +139,29 @@ try {
         jsonResponse(['ok' => true]);
     }
 
+    if ($action === 'delete') {
+        // Hard delete — cascades via FK to players, rounds, voter_codes,
+        // submissions, ballot_picks, locked_roster. Requires the admin to
+        // pass confirm_name matching the election name (typo guard).
+        $d        = getInput();
+        $id       = (int)($d['id'] ?? 0);
+        $confirm  = trim($d['confirm_name'] ?? '');
+        if (!$id) jsonError('id required');
+        $stmt = $db->prepare("SELECT name FROM elections WHERE id=?");
+        $stmt->execute([$id]);
+        $e = $stmt->fetch();
+        if (!$e) jsonError('Not found', 404);
+        if ($confirm !== $e['name']) {
+            jsonError('To confirm deletion, send confirm_name matching the election name exactly', 400);
+        }
+        audit($db, null, 'admin', 'delete_election', ['id' => $id, 'name' => $e['name']]);
+        $db->prepare("DELETE FROM elections WHERE id=?")->execute([$id]);
+        if (isset($_SESSION['admin_election_id']) && (int)$_SESSION['admin_election_id'] === $id) {
+            unset($_SESSION['admin_election_id']);
+        }
+        jsonResponse(['ok' => true]);
+    }
+
     if ($action === 'select') {
         $d  = getInput();
         $id = (int)($d['id'] ?? 0);
