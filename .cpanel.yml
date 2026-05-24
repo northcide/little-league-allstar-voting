@@ -1,0 +1,13 @@
+---
+deployment:
+  tasks:
+    - export DEPLOYPATH=$HOME/public_html/
+    - /bin/mkdir -p $DEPLOYPATH/api $DEPLOYPATH/css $DEPLOYPATH/data $DEPLOYPATH/js $DEPLOYPATH/sql
+    - /bin/cp -R api/.   $DEPLOYPATH/api/
+    - /bin/cp -R css/.   $DEPLOYPATH/css/
+    - /bin/cp -R data/.  $DEPLOYPATH/data/
+    - /bin/cp -R js/.    $DEPLOYPATH/js/
+    - /bin/cp -R sql/.   $DEPLOYPATH/sql/
+    - /bin/cp index.php  $DEPLOYPATH
+    - /bin/cp README.md  $DEPLOYPATH
+    - /bin/cp .gitignore $DEPLOYPATH
