@@ -740,7 +740,7 @@
               return h('button', {
                 class: `btn ${cr.state === 'all_submitted' ? 'btn-success' : 'btn-warning'}`,
                 onclick: () => finalizeRound(cr, cr.state !== 'all_submitted'),
-              }, cr.state === 'all_submitted' ? '✓ Finalize Round' : `⚠ Force-Finalize (only ${counts.submitted}/${counts.expected})`);
+              }, cr.state === 'all_submitted' ? `✓ Finalize Round ${cr.round_num}` : `⚠ Force-Finalize Round ${cr.round_num} (only ${counts.submitted}/${counts.expected})`);
             }
             // No active round (either no rounds yet or latest is finalized) → Start Next + Finalize All
             return null;
@@ -1259,17 +1259,17 @@
     setTimeout(() => ppc.focus(), 50);
   }
   function finalizeRound(cr, force) {
-    confirmDialog(`Finalize round ${cr.round_num}?`,
-      force ? 'Not all coaches have voted. Finalizing now will compute results from submitted ballots only.'
-            : 'Tally the votes and lock the top players into the roster.',
+    confirmDialog(`Finalize Round ${cr.round_num}?`,
+      force ? `Not all coaches have voted in Round ${cr.round_num}. Finalizing now will tally the submitted ballots only and lock the top players from this round into the roster. The election itself stays open — you can still start more rounds.`
+            : `Tally Round ${cr.round_num}'s votes and lock the top players into the roster. The election itself stays open — you can still start more rounds.`,
       async () => {
         try {
           const r = await api('rounds', 'finalize', { round_id: cr.id, override: !!force });
           pollOnce();
-          if (r.tie) toast('Finalized with a tie at cutoff — start another round if you want to break it.', 'warn', 6000);
-          else      toast('Round finalized.', 'success');
+          if (r.tie) toast(`Round ${cr.round_num} finalized with a tie at cutoff — start another round if you want to break it.`, 'warn', 6000);
+          else      toast(`Round ${cr.round_num} finalized.`, 'success');
         } catch (e) { toast(e.message, 'error'); }
-      }, force ? 'Force-finalize' : 'Finalize', !!force);
+      }, force ? `Force-Finalize Round ${cr.round_num}` : `Finalize Round ${cr.round_num}`, !!force);
   }
   function completeElection() {
     confirmDialog('Finalize all rounds?', 'Mark this election as complete. Coaches will keep their access but no new rounds can be started.',
