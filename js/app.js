@@ -299,22 +299,47 @@
       clear(body);
       const err = h('div', { class: 'login-err hidden' });
       if (mode === 'coach') {
-        const code = h('input', { type: 'text', placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+        // If the URL has ?e=<code>, the election is pre-selected via shared link.
+        const params = new URLSearchParams(window.location.search);
+        const presetCode = (params.get('e') || '').trim().toLowerCase();
+
         const word = h('input', { type: 'text', placeholder: 'e.g., apple', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
-        const btn  = h('button', { class: 'btn btn-primary btn-block', onclick: async () => {
-          try {
-            err.classList.add('hidden');
-            await coachLogin(code.value.trim(), word.value.trim());
-          } catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
-        } }, 'Enter Vote');
-        body.append(
-          h('p', { class: 'sub' }, 'Enter the election code and the word you were given.'),
-          err,
-          h('label', {}, 'Election Code'), code,
-          h('label', {}, 'Your Word'), word,
-          btn,
-        );
-        setTimeout(() => code.focus(), 50);
+        const btn  = h('button', { class: 'btn btn-primary btn-block' }, 'Enter Vote');
+
+        if (presetCode) {
+          btn.onclick = async () => {
+            try { err.classList.add('hidden'); await coachLogin(presetCode, word.value.trim()); }
+            catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
+          };
+          word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+          body.append(
+            h('p', { class: 'sub' }, 'Enter the word you were given.'),
+            err,
+            h('div', { class: 'preset-code' },
+              h('span', { class: 'preset-code-label' }, 'Election:'),
+              h('span', { class: 'preset-code-value' }, presetCode),
+              h('a', { href: '?', class: 'preset-code-change' }, '(change)'),
+            ),
+            h('label', {}, 'Your Word'), word,
+            btn,
+          );
+          setTimeout(() => word.focus(), 50);
+        } else {
+          const code = h('input', { type: 'text', placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+          btn.onclick = async () => {
+            try { err.classList.add('hidden'); await coachLogin(code.value.trim(), word.value.trim()); }
+            catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
+          };
+          word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+          body.append(
+            h('p', { class: 'sub' }, 'Enter the election code and the word you were given.'),
+            err,
+            h('label', {}, 'Election Code'), code,
+            h('label', {}, 'Your Word'), word,
+            btn,
+          );
+          setTimeout(() => code.focus(), 50);
+        }
       } else {
         const pin = h('input', { type: 'password', placeholder: 'Admin PIN' });
         const btn = h('button', { class: 'btn btn-primary btn-block', onclick: async () => {
@@ -728,7 +753,14 @@
 
     rootEl.append(
       h('div', { class: 'page-h' },
-        h('h2', {}, e.name),
+        h('h2', {},
+          e.name,
+          h('button', {
+            class: 'btn btn-sm btn-secondary copy-link',
+            title: 'Copy a link coaches can use to skip entering the election code',
+            onclick: () => copyCoachLink(e.vote_code),
+          }, '🔗 Copy coach link'),
+        ),
         h('div', { class: 'page-actions' },
           (() => {
             if (e.status === 'setup') {
@@ -797,6 +829,27 @@
   function allRoundsFinalized(s) {
     if (!s || !s.rounds || !s.rounds.length) return false;
     return s.rounds.every(r => r.state === 'finalized');
+  }
+
+  // Build a shareable URL like https://host/allstar/?e=majors2026 and copy to clipboard.
+  function copyCoachLink(voteCode) {
+    const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+    const url  = `${base}?e=${encodeURIComponent(voteCode)}`;
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.append(ta); ta.select();
+      try { document.execCommand('copy'); toast(`Copied: ${url}`, 'success', 5000); }
+      catch { toast(url, 'info', 8000); }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(() => toast(`Copied: ${url}`, 'success', 5000))
+        .catch(fallback);
+    } else {
+      fallback();
+    }
   }
 
   // Admin-only panel: per-player vote tally for the most recently finalized round.
