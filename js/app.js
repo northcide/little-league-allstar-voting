@@ -770,6 +770,9 @@
         ),
       ) : h('div', { class: 'panel' }, h('div', { class: 'muted' }, 'No round yet — start the next round to open voting.')),
 
+      // Last finalized round results (admin sees full vote counts here)
+      renderLastRoundResults(s),
+
       // Codes status compact
       h('div', { class: 'panel' },
         h('div', { class: 'panel-h' }, h('h3', {}, 'Voter codes')),
@@ -794,6 +797,62 @@
   function allRoundsFinalized(s) {
     if (!s || !s.rounds || !s.rounds.length) return false;
     return s.rounds.every(r => r.state === 'finalized');
+  }
+
+  // Admin-only panel: per-player vote tally for the most recently finalized round.
+  // Returns null when no round has finalized yet. Uses s.round_tallies (already in
+  // the state payload) so no extra API call.
+  function renderLastRoundResults(s) {
+    const tallies = s.round_tallies || {};
+    const nums = Object.keys(tallies).map(Number);
+    if (!nums.length) return null;
+    const lastRn = Math.max(...nums);
+    const tally  = tallies[lastRn] || {};
+    const round  = (s.rounds || []).find(r => r.round_num === lastRn);
+    if (!round) return null;
+    const players = s.players || [];
+
+    const sortedIds = Object.keys(tally).map(Number).sort((a, b) => {
+      const da = tally[a], db = tally[b];
+      if (db !== da) return db - da;
+      return a - b;
+    });
+
+    const lockedSet = new Set((s.locked || []).filter(l => l.locked_in_round === lastRn).map(l => l.player_id));
+    const tiedSet   = new Set((s.round_tied_ids && s.round_tied_ids[lastRn]) || []);
+
+    return h('div', { class: 'panel' },
+      h('div', { class: 'panel-h' },
+        h('h3', {}, `Round ${lastRn} results`),
+        h('span', { class: 'micro' }, `Pick ${round.picks_per_coach}, lock ${round.picks_to_lock}`),
+        round.has_tie_at_cutoff ? h('span', { class: 'pill pill-warn' }, '⚠ tie at cutoff') : null,
+      ),
+      sortedIds.length === 0
+        ? h('div', { class: 'muted' }, 'No ballots were submitted.')
+        : h('table', { class: 'tbl tally' },
+            h('thead', {}, h('tr', {},
+              h('th', {}, 'Player'),
+              h('th', {}, 'Jersey'),
+              h('th', {}, 'Votes'),
+              h('th', {}, 'Status'),
+            )),
+            h('tbody', {}, ...sortedIds.map(pid => {
+              const p = players.find(pl => pl.id === pid) || { name: `#${pid}`, jersey: null };
+              const isLocked = lockedSet.has(pid);
+              const isTied   = tiedSet.has(pid);
+              return h('tr', { class: isLocked ? 'row-locked' : (isTied ? 'row-tied' : '') },
+                h('td', {}, p.name),
+                h('td', {}, p.jersey || ''),
+                h('td', {}, String(tally[pid])),
+                h('td', {},
+                  isLocked ? h('span', { class: 'pill pill-active' }, '✓ locked this round')
+                  : isTied ? h('span', { class: 'pill pill-warn' }, '⚖ tied at cutoff')
+                  : null,
+                ),
+              );
+            }))
+          ),
+    );
   }
 
   function counterCard(label, value, hint, tone = '') {
