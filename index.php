@@ -7,7 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#1e3a5f">
   <title>Allstar — Anonymous Coach Voting</title>
-  <link rel="stylesheet" href="css/app.css?v=1">
+  <link rel="stylesheet" href="css/app.css?v=<?= filemtime(__DIR__ . '/css/app.css') ?>">
 </head>
 <body>
   <div id="app">
@@ -23,6 +23,6 @@
     </main>
     <div id="toast"></div>
   </div>
-  <script src="js/app.js?v=1"></script>
+  <script src="js/app.js?v=<?= filemtime(__DIR__ . '/js/app.js') ?>"></script>
 </body>
 </html>
