@@ -1,0 +1,5 @@
+api/config.php
+data/*.log
+data/*.json
+.DS_Store
+*.swp
