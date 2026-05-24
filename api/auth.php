@@ -81,7 +81,7 @@ try {
         $voteCode = strtolower(trim($data['vote_code'] ?? ''));
         $word     = strtolower(trim($data['word'] ?? ''));
 
-        if ($voteCode === '' || $word === '') jsonError('Election code and word are required');
+        if ($voteCode === '' || $word === '') jsonError('Election code and number are required');
 
         // Find election by vote_code (case-insensitive via utf8mb4_unicode_ci)
         $stmt = $db->prepare("SELECT id, name, status, expected_voters, current_round FROM elections WHERE LOWER(vote_code)=? AND status IN ('active','setup','completed') LIMIT 1");
@@ -104,7 +104,7 @@ try {
         $vc = $stmt->fetch();
         if (!$vc || $vc['revoked']) {
             recordFailedLogin($ip);
-            jsonError('Word code not found for this election', 401);
+            jsonError('Number not found for this election', 401);
         }
 
         clearRateLimit($ip);

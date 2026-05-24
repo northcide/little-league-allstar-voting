@@ -1,15 +1,15 @@
 # Allstar ⚾ — Anonymous Little League All-Star Coach Voting
 
 A self-hosted web app for running anonymous All-Star coach votes. The admin sets
-up an election, distributes simple "word codes" to coaches, runs multiple rounds
+up an election, distributes simple numeric codes to coaches, runs multiple rounds
 of voting with live submission tracking, and finalizes results with override
 controls.
 
 ## Features
 
 - **Admin** creates named elections (e.g., "Majors International"), sets the
-  player roster, sets a target roster size, and generates a list of memorable
-  single-word codes to hand to each coach.
+  player roster, sets a target roster size, and generates sequential numeric
+  codes (1, 2, 3, …) to hand to each coach.
 - **Dynamic rounds**: rounds are created one at a time. Each time the admin
   clicks **Start Next Round**, they enter that round's *Picks per coach* and
   *Picks to lock* — defaults match the previous round. There's no upfront
@@ -78,12 +78,16 @@ What the system *does* prevent reliably:
   `UNIQUE(round_id, voter_code_id)` constraint).
 - A coach cannot change their submitted ballot without admin intervention.
 
-## Word codes
+## Voter codes
 
-`data/wordlist.txt` ships with several hundred short common nouns. The admin
-clicks "Generate codes (n)" and the system draws `n` random unused words for
-that election. Distribute one word per coach via text/print without recording
-who got which word.
+The admin clicks "Generate codes (n)" and the system creates `n` sequential
+numeric codes (1, 2, 3, …) for that election. Subsequent generate calls pick
+up where the count left off. Distribute one number per coach via text/print
+without recording who got which number.
+
+Coaches log in with the election's vote_code plus their number. Admins can
+also share a URL of the form `https://yoursite/allstar/?e=<vote_code>` —
+coaches who use it only have to enter their number.
 
 ## Tech notes
 

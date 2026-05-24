@@ -141,7 +141,7 @@ try {
         $locked->execute([$eid]);
 
         // Voter codes — derive state badges; never include picks
-        $codesStmt = $db->query("SELECT id, word, revoked, session_token, last_seen_at FROM voter_codes WHERE election_id={$eid} ORDER BY word");
+        $codesStmt = $db->query("SELECT id, word, revoked, session_token, last_seen_at FROM voter_codes WHERE election_id={$eid} ORDER BY CAST(word AS UNSIGNED), word");
         $codes = $codesStmt->fetchAll();
         $now = time();
 

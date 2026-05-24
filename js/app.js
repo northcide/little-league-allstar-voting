@@ -303,7 +303,7 @@
         const params = new URLSearchParams(window.location.search);
         const presetCode = (params.get('e') || '').trim().toLowerCase();
 
-        const word = h('input', { type: 'text', placeholder: 'e.g., apple', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
+        const word = h('input', { type: 'text', inputmode: 'numeric', placeholder: 'e.g., 5', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
         const btn  = h('button', { class: 'btn btn-primary btn-block' }, 'Enter Vote');
 
         if (presetCode) {
@@ -313,14 +313,14 @@
           };
           word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
           body.append(
-            h('p', { class: 'sub' }, 'Enter the word you were given.'),
+            h('p', { class: 'sub' }, 'Enter the number you were given.'),
             err,
             h('div', { class: 'preset-code' },
               h('span', { class: 'preset-code-label' }, 'Election:'),
               h('span', { class: 'preset-code-value' }, presetCode),
               h('a', { href: '?', class: 'preset-code-change' }, '(change)'),
             ),
-            h('label', {}, 'Your Word'), word,
+            h('label', {}, 'Your Number'), word,
             btn,
           );
           setTimeout(() => word.focus(), 50);
@@ -332,10 +332,10 @@
           };
           word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
           body.append(
-            h('p', { class: 'sub' }, 'Enter the election code and the word you were given.'),
+            h('p', { class: 'sub' }, 'Enter the election code and the number you were given.'),
             err,
             h('label', {}, 'Election Code'), code,
-            h('label', {}, 'Your Word'), word,
+            h('label', {}, 'Your Number'), word,
             btn,
           );
           setTimeout(() => code.focus(), 50);

@@ -28,7 +28,7 @@ try {
                        (SELECT 1 FROM submissions s WHERE s.round_id=? AND s.voter_code_id=vc.id LIMIT 1) AS submitted_round
                 FROM voter_codes vc
                 WHERE vc.election_id=?
-                ORDER BY vc.word";
+                ORDER BY CAST(vc.word AS UNSIGNED), vc.word";
         $stmt = $db->prepare($sql);
         $stmt->execute([$rid ?: 0, $eid]);
         $rows = $stmt->fetchAll();
@@ -52,28 +52,25 @@ try {
     }
 
     if ($action === 'generate') {
+        // Sequential numeric codes. Picks up after the highest existing numeric
+        // code for the election, so a second generate run continues the count.
         $d = getInput();
         $n = (int)($d['n'] ?? 0);
         if ($n < 1 || $n > 500) jsonError('n must be 1–500');
 
-        $existing = $db->prepare("SELECT word FROM voter_codes WHERE election_id=?");
-        $existing->execute([$eid]);
-        $used = array_map('strtolower', $existing->fetchAll(PDO::FETCH_COLUMN));
-
-        $wordlist = file(__DIR__ . '/../data/wordlist.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        if (!$wordlist) jsonError('Wordlist not found', 500);
-        $pool = array_values(array_diff($wordlist, $used));
-        if (count($pool) < $n) jsonError('Not enough unused words. Increase wordlist or reduce n.', 400);
-
-        shuffle($pool);
-        $picked = array_slice($pool, 0, $n);
+        $maxStmt = $db->prepare("SELECT COALESCE(MAX(CAST(word AS UNSIGNED)), 0) FROM voter_codes WHERE election_id=?");
+        $maxStmt->execute([$eid]);
+        $start = (int)$maxStmt->fetchColumn() + 1;
 
         $ins = $db->prepare("INSERT INTO voter_codes (election_id, word) VALUES (?,?)");
-        foreach ($picked as $w) {
-            $ins->execute([$eid, strtolower($w)]);
+        $added = [];
+        for ($i = 0; $i < $n; $i++) {
+            $num = (string)($start + $i);
+            $ins->execute([$eid, $num]);
+            $added[] = $num;
         }
-        audit($db, $eid, 'admin', 'codes_generate', ['n' => $n]);
-        jsonResponse(['added' => $picked]);
+        audit($db, $eid, 'admin', 'codes_generate', ['n' => $n, 'range' => $start . '-' . ($start + $n - 1)]);
+        jsonResponse(['added' => $added]);
     }
 
     if ($action === 'revoke') {
