@@ -19,6 +19,7 @@
     roundOverride: new Map(),   // round_num → bool (true=expanded, false=collapsed). Absent → default
     lastMaxRoundNum: 0,         // tracks the highest round_num seen
     lastFocusKey: '',           // "<round_num>:<state>" of the latest round — reset overrides when this changes
+    lastStateSig: '',           // signature of last rendered state — skip re-render when unchanged
   };
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
@@ -110,6 +111,17 @@
     return !!a.closest('#main');
   }
 
+  // Stable signature of the state payload, used to skip the 2s re-render when
+  // nothing user-visible has changed. last_seen_at advances on every poll a
+  // coach makes, so we drop it from the comparison — its effect on the UI is
+  // mediated by the (also-included) `logged_in` boolean which only flips when
+  // a coach crosses the 30s-active threshold.
+  const _STATE_NOISE_KEYS = new Set(['last_seen_at', 'updated_at']);
+  function stateSignature(s) {
+    if (!s) return '';
+    return JSON.stringify(s, (k, v) => _STATE_NOISE_KEYS.has(k) ? undefined : v);
+  }
+
   async function pollOnce() {
     try {
       const data = await api('state', 'poll');
@@ -120,16 +132,24 @@
         const newMs = ballotIn ? 5000 : 2000;
         if (newMs !== S.pollMs) { S.pollMs = newMs; if (S.pollTimer) { clearInterval(S.pollTimer); S.pollTimer = setInterval(pollOnce, S.pollMs); } }
       }
-      if (!isEditingInline()) render();
+      const sig = stateSignature(data);
+      if (sig !== S.lastStateSig) {
+        S.lastStateSig = sig;
+        if (!isEditingInline()) render();
+      }
     } catch (e) {
       if (e.status === 401) {
         stopPolling();
         S.role = null; S.state = null;
         S.view = 'login';
+        S.lastStateSig = '';
         render();
       } else {
-        S.lastErr = e.message;
-        if (!isEditingInline()) render();
+        const msg = e.message || '';
+        if (msg !== S.lastErr) {
+          S.lastErr = msg;
+          if (!isEditingInline()) render();
+        }
       }
     }
   }
