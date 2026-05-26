@@ -10,6 +10,145 @@ try {
     $eid = currentAdminElectionId();
     if (!$eid) jsonError('No election selected', 400);
 
+    // ── List candidates for the next alternate round ──────────────────────────
+    // Returns three sets: all unlocked active players, those that received any
+    // vote in a finalized round (default-checked for a fresh alternate round),
+    // and the tied-at-cutoff players from the most-recent alternate round
+    // (default-checked when continuing tie resolution). Also returns the
+    // suggested slot count.
+    if ($action === 'alternate_candidates') {
+        $all = $db->prepare(
+            "SELECT p.id, p.name, p.jersey FROM players p
+             WHERE p.election_id = ? AND p.active = 1
+               AND p.id NOT IN (SELECT player_id FROM locked_roster WHERE election_id = ?)
+             ORDER BY p.sort_order, p.name"
+        );
+        $all->execute([$eid, $eid]);
+        $allRows = $all->fetchAll();
+
+        $voted = $db->prepare(
+            "SELECT DISTINCT bp.player_id
+             FROM ballot_picks bp
+             JOIN rounds r ON r.id = bp.round_id
+             WHERE r.election_id = ? AND r.state = 'finalized'
+               AND bp.player_id NOT IN (SELECT player_id FROM locked_roster WHERE election_id = ?)"
+        );
+        $voted->execute([$eid, $eid]);
+        $votedIds = array_map('intval', $voted->fetchAll(PDO::FETCH_COLUMN));
+
+        // Most-recent alternate round with unresolved cutoff tie
+        $prev = $db->prepare(
+            "SELECT id, round_num, picks_to_lock, has_tie_at_cutoff, tie_player_ids_json
+             FROM rounds
+             WHERE election_id = ? AND round_type = 'alternate' AND state = 'finalized'
+             ORDER BY round_num DESC LIMIT 1"
+        );
+        $prev->execute([$eid]);
+        $prevAlt = $prev->fetch() ?: null;
+
+        $priorTie = [];
+        $suggestedSlots = 0;
+        if ($prevAlt && (int)$prevAlt['has_tie_at_cutoff'] === 1) {
+            $rawIds = array_values(json_decode($prevAlt['tie_player_ids_json'] ?? '[]', true) ?: []);
+            // Only count as "unresolved" if none of those tied players were locked since
+            if ($rawIds) {
+                $in = implode(',', array_map('intval', $rawIds));
+                $stillUnlocked = (int)$db->query(
+                    "SELECT COUNT(*) FROM players p
+                     WHERE p.id IN ($in)
+                       AND p.id NOT IN (SELECT player_id FROM locked_roster WHERE election_id = $eid)"
+                )->fetchColumn();
+                if ($stillUnlocked === count($rawIds)) {
+                    $priorTie = array_map('intval', $rawIds);
+                }
+            }
+        }
+        if (!empty($priorTie)) {
+            $lp = $db->prepare("SELECT COUNT(*) FROM locked_roster WHERE election_id=? AND locked_in_round=?");
+            $lp->execute([$eid, (int)$prevAlt['round_num']]);
+            $lockedInPrev = (int)$lp->fetchColumn();
+            $suggestedSlots = max(1, (int)$prevAlt['picks_to_lock'] - $lockedInPrev);
+        }
+
+        jsonResponse([
+            'all_active'        => $allRows,
+            'with_prior_votes'  => $votedIds,
+            'prior_tie'         => $priorTie,
+            'suggested_slots'   => $suggestedSlots,
+        ]);
+    }
+
+    // ── Start a new alternate round ───────────────────────────────────────────
+    if ($action === 'start_alternate') {
+        $in   = getInput();
+        $ppc  = (int)($in['picks_per_coach'] ?? 0);
+        $ptl  = (int)($in['picks_to_lock']   ?? 0);
+        $cand = $in['candidate_ids'] ?? [];
+        if (!is_array($cand) || count($cand) < 2) jsonError('Pick at least 2 candidates for an alternate round');
+        if ($ppc < 1 || $ptl < 1) jsonError('Alternates count must be ≥1');
+        if ($ptl > count($cand))  jsonError('Cannot lock more alternates than candidates provided');
+        // For alternates we enforce ppc == ptl — every ranked position becomes a slot
+        if ($ppc !== $ptl) $ppc = $ptl;
+
+        $db->beginTransaction();
+        try {
+            $stmt = $db->prepare("SELECT * FROM elections WHERE id=? FOR UPDATE");
+            $stmt->execute([$eid]);
+            $e = $stmt->fetch();
+            if (!$e || $e['status'] !== 'active') {
+                $db->rollBack();
+                jsonError('Election is not active', 400);
+            }
+            // Previous round (if any) must be finalized
+            if ($e['current_round'] > 0) {
+                $prev = $db->prepare("SELECT state FROM rounds WHERE election_id=? AND round_num=?");
+                $prev->execute([$eid, $e['current_round']]);
+                $pr = $prev->fetch();
+                if ($pr && $pr['state'] !== 'finalized') {
+                    $db->rollBack();
+                    jsonError('Finalize the current round before starting an alternate round', 409);
+                }
+            }
+
+            // Validate every candidate is an active, non-locked player in this election
+            $candIds = array_values(array_unique(array_map('intval', $cand)));
+            $placeholders = implode(',', array_fill(0, count($candIds), '?'));
+            $valid = $db->prepare(
+                "SELECT id FROM players WHERE election_id=? AND active=1
+                  AND id IN ($placeholders)
+                  AND id NOT IN (SELECT player_id FROM locked_roster WHERE election_id=?)"
+            );
+            $valid->execute(array_merge([$eid], $candIds, [$eid]));
+            $validIds = array_map('intval', $valid->fetchAll(PDO::FETCH_COLUMN));
+            $invalid = array_diff($candIds, $validIds);
+            if (!empty($invalid)) {
+                $db->rollBack();
+                jsonError('One or more candidates are invalid (locked, inactive, or wrong election): ' . implode(',', $invalid), 400);
+            }
+
+            $nextRn = ((int)$db->query("SELECT COALESCE(MAX(round_num),0) FROM rounds WHERE election_id={$eid}")->fetchColumn()) + 1;
+            $ins = $db->prepare("INSERT INTO rounds (election_id, round_num, picks_per_coach, picks_to_lock, round_type, state) VALUES (?,?,?,?,'alternate','active')");
+            $ins->execute([$eid, $nextRn, $ppc, $ptl]);
+            $newId = (int)$db->lastInsertId();
+            // Populate round_candidates
+            $cIns = $db->prepare("INSERT INTO round_candidates (round_id, player_id) VALUES (?,?)");
+            foreach ($validIds as $pid) $cIns->execute([$newId, $pid]);
+
+            $db->prepare("UPDATE elections SET current_round=? WHERE id=?")->execute([$nextRn, $eid]);
+            audit($db, $eid, 'admin', 'start_alternate_round', [
+                'round_num' => $nextRn,
+                'picks_per_coach' => $ppc,
+                'picks_to_lock' => $ptl,
+                'candidates' => $validIds,
+            ]);
+            $db->commit();
+            jsonResponse(['ok' => true, 'round_id' => $newId, 'round_num' => $nextRn]);
+        } catch (Throwable $ex) {
+            if ($db->inTransaction()) $db->rollBack();
+            throw $ex;
+        }
+    }
+
     // ── Start next round (creates a new round on-demand with admin-supplied config) ──
     if ($action === 'start_next') {
         $in  = getInput();
@@ -42,18 +181,21 @@ try {
                 }
             }
 
-            // Sanity: enough eligible players remain, and roster has room
-            $lockedCount = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid}")->fetchColumn();
+            // Sanity: enough eligible players remain, and roster has room.
+            // Roster cap applies only to MAIN roster (alternate_rank IS NULL);
+            // alternates sit outside the cap.
+            $totalLockedAll = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid}")->fetchColumn();
+            $mainLockedCount = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid} AND alternate_rank IS NULL")->fetchColumn();
             $totalActive = (int)$db->query("SELECT COUNT(*) FROM players WHERE election_id={$eid} AND active=1")->fetchColumn();
-            $remaining   = $totalActive - $lockedCount;
+            $remaining   = $totalActive - $totalLockedAll;
             if ($remaining < $ppc) {
                 $db->rollBack();
                 jsonError("Only {$remaining} unlocked players remain; round needs {$ppc} picks per coach", 409);
             }
-            $slotsRemaining = (int)$e['max_roster_size'] - $lockedCount;
+            $slotsRemaining = (int)$e['max_roster_size'] - $mainLockedCount;
             if ($slotsRemaining <= 0) {
                 $db->rollBack();
-                jsonError("Roster is already full ({$lockedCount}/{$e['max_roster_size']}). You can finalize all rounds now.", 409);
+                jsonError("Roster is already full ({$mainLockedCount}/{$e['max_roster_size']}). You can finalize all rounds now.", 409);
             }
 
             // Create the round at MAX(round_num)+1 and activate it
@@ -96,14 +238,28 @@ try {
             }
 
             // Tally — ONLY join ballot_picks (anonymity boundary)
-            $tally = $db->prepare(
-                "SELECT bp.player_id, COUNT(*) AS cnt
-                 FROM ballot_picks bp
-                 WHERE bp.round_id = ?
-                 GROUP BY bp.player_id
-                 ORDER BY cnt DESC, bp.player_id ASC"
-            );
-            $tally->execute([$rid]);
+            // Regular rounds: count votes. Alternate rounds: Borda points = sum of (picks_per_coach + 1 - rank).
+            $isAlternate = ($round['round_type'] ?? 'regular') === 'alternate';
+            if ($isAlternate) {
+                $ppc = (int)$round['picks_per_coach'];
+                $tally = $db->prepare(
+                    "SELECT bp.player_id, SUM(? + 1 - bp.`rank`) AS cnt
+                     FROM ballot_picks bp
+                     WHERE bp.round_id = ? AND bp.`rank` IS NOT NULL
+                     GROUP BY bp.player_id
+                     ORDER BY cnt DESC, bp.player_id ASC"
+                );
+                $tally->execute([$ppc, $rid]);
+            } else {
+                $tally = $db->prepare(
+                    "SELECT bp.player_id, COUNT(*) AS cnt
+                     FROM ballot_picks bp
+                     WHERE bp.round_id = ?
+                     GROUP BY bp.player_id
+                     ORDER BY cnt DESC, bp.player_id ASC"
+                );
+                $tally->execute([$rid]);
+            }
             $results = $tally->fetchAll();
 
             // Exclude already-locked players (defensive — the ballot should already)
@@ -112,16 +268,22 @@ try {
             $locked = array_map('intval', $lockedIds->fetchAll(PDO::FETCH_COLUMN));
             $results = array_values(array_filter($results, fn($row) => !in_array((int)$row['player_id'], $locked, true)));
 
-            // Clip picks_to_lock to remaining roster slots so we never exceed the cap
-            $maxRoster      = (int)$db->query("SELECT max_roster_size FROM elections WHERE id={$eid}")->fetchColumn();
-            $lockedCount    = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid}")->fetchColumn();
-            $slotsRemaining = max(0, $maxRoster - $lockedCount);
-            if ($slotsRemaining === 0) {
-                $db->rollBack();
-                jsonError("Roster is already full ({$lockedCount}/{$maxRoster}). Use 'Edit locked players' to revise instead.", 409);
+            // Clip picks_to_lock to remaining roster slots so we never exceed the cap.
+            // For alternate rounds, alternates sit outside the main roster cap, so skip.
+            if ($isAlternate) {
+                $picksToLock = (int)$round['picks_to_lock'];
+                $clipped     = false;
+            } else {
+                $maxRoster      = (int)$db->query("SELECT max_roster_size FROM elections WHERE id={$eid}")->fetchColumn();
+                $lockedCount    = (int)$db->query("SELECT COUNT(*) FROM locked_roster WHERE election_id={$eid} AND alternate_rank IS NULL")->fetchColumn();
+                $slotsRemaining = max(0, $maxRoster - $lockedCount);
+                if ($slotsRemaining === 0) {
+                    $db->rollBack();
+                    jsonError("Roster is already full ({$lockedCount}/{$maxRoster}). Use 'Edit locked players' to revise instead.", 409);
+                }
+                $picksToLock = min((int)$round['picks_to_lock'], $slotsRemaining);
+                $clipped     = $picksToLock < (int)$round['picks_to_lock'];
             }
-            $picksToLock = min((int)$round['picks_to_lock'], $slotsRemaining);
-            $clipped     = $picksToLock < (int)$round['picks_to_lock'];
             $winnerIds   = [];
             $hasTie      = 0;
             $tieIds      = [];
@@ -149,10 +311,22 @@ try {
                 }
             }
 
-            // Persist winners → locked_roster
-            $lockIns = $db->prepare("INSERT IGNORE INTO locked_roster (election_id, player_id, locked_in_round) VALUES (?,?,?)");
-            foreach ($winnerIds as $pid) {
-                $lockIns->execute([$eid, $pid, (int)$round['round_num']]);
+            // Persist winners → locked_roster.
+            // For alternate rounds, also assign sequential alternate_rank that continues
+            // from the highest existing alternate_rank in this election (so a tie-
+            // resolution alternate round picks up where the previous one left off).
+            if ($isAlternate) {
+                $nextRank = ((int)$db->query("SELECT COALESCE(MAX(alternate_rank), 0) FROM locked_roster WHERE election_id={$eid}")->fetchColumn()) + 1;
+                $lockIns = $db->prepare("INSERT IGNORE INTO locked_roster (election_id, player_id, locked_in_round, alternate_rank) VALUES (?,?,?,?)");
+                foreach ($winnerIds as $pid) {
+                    $lockIns->execute([$eid, $pid, (int)$round['round_num'], $nextRank]);
+                    $nextRank++;
+                }
+            } else {
+                $lockIns = $db->prepare("INSERT IGNORE INTO locked_roster (election_id, player_id, locked_in_round) VALUES (?,?,?)");
+                foreach ($winnerIds as $pid) {
+                    $lockIns->execute([$eid, $pid, (int)$round['round_num']]);
+                }
             }
 
             $db->prepare(

@@ -52,7 +52,7 @@ try {
                 'picks_per_coach'   => (int)$round['picks_per_coach'],
                 'picks_to_lock'     => (int)$round['picks_to_lock'],
                 'state'             => $round['state'],
-                'is_tiebreak'       => (bool)$round['is_tiebreak'],
+                'round_type'        => $round['round_type'] ?? 'regular',
                 'has_tie_at_cutoff' => (bool)$round['has_tie_at_cutoff'],
             ];
 
@@ -106,7 +106,18 @@ try {
         $rid = (int)($d['round_id'] ?? 0);
         if ($rid !== (int)$round['id']) jsonError('Round mismatch — your ballot is stale; please refresh', 409);
 
-        $ids = array_values(array_unique(array_map('intval', $d['player_ids'] ?? [])));
+        // For alternate rounds the payload is an ORDERED array (1st choice first).
+        // For regular rounds, order is irrelevant — we still pull as an array and
+        // dedupe, but don't store a rank.
+        $rawIds = is_array($d['player_ids'] ?? null) ? $d['player_ids'] : [];
+        $ids = [];
+        $seen = [];
+        foreach ($rawIds as $v) {
+            $i = (int)$v;
+            if ($i <= 0 || isset($seen[$i])) continue;
+            $seen[$i] = true;
+            $ids[] = $i;
+        }
 
         $db->beginTransaction();
         try {
@@ -119,10 +130,13 @@ try {
                 jsonError('This round is no longer accepting ballots', 409);
             }
 
+            $isAlternate = ($rnow['round_type'] ?? 'regular') === 'alternate';
             $picksReq = (int)$rnow['picks_per_coach'];
             if (count($ids) !== $picksReq) {
                 $db->rollBack();
-                jsonError("You must pick exactly {$picksReq} players", 400);
+                jsonError($isAlternate
+                    ? "You must rank exactly {$picksReq} players"
+                    : "You must pick exactly {$picksReq} players", 400);
             }
 
             // Validate every id is an active, non-locked player in this election
@@ -146,6 +160,19 @@ try {
                 }
             }
 
+            // For alternate rounds, every pick must also be in the round's candidate whitelist
+            if ($isAlternate) {
+                $candStmt = $db->prepare("SELECT player_id FROM round_candidates WHERE round_id=?");
+                $candStmt->execute([$rid]);
+                $cand = array_map('intval', $candStmt->fetchAll(PDO::FETCH_COLUMN));
+                foreach ($ids as $pid) {
+                    if (!in_array($pid, $cand, true)) {
+                        $db->rollBack();
+                        jsonError('Player not in this round\'s candidate pool', 400);
+                    }
+                }
+            }
+
             // Idempotent: if a submission row already exists, return it as success.
             $existing = $db->prepare("SELECT ballot_token FROM submissions WHERE round_id=? AND voter_code_id=?");
             $existing->execute([$rid, (int)$vc['id']]);
@@ -160,9 +187,17 @@ try {
             $db->prepare("INSERT INTO submissions (round_id, voter_code_id, ballot_token, submitted_at) VALUES (?,?,?,NOW())")
                ->execute([$rid, (int)$vc['id'], $ballotToken]);
 
-            $pIns = $db->prepare("INSERT INTO ballot_picks (round_id, ballot_token, player_id) VALUES (?,?,?)");
-            foreach ($ids as $pid) {
-                $pIns->execute([$rid, $ballotToken, $pid]);
+            if ($isAlternate) {
+                $pIns = $db->prepare("INSERT INTO ballot_picks (round_id, ballot_token, player_id, `rank`) VALUES (?,?,?,?)");
+                $rank = 1;
+                foreach ($ids as $pid) {
+                    $pIns->execute([$rid, $ballotToken, $pid, $rank++]);
+                }
+            } else {
+                $pIns = $db->prepare("INSERT INTO ballot_picks (round_id, ballot_token, player_id) VALUES (?,?,?)");
+                foreach ($ids as $pid) {
+                    $pIns->execute([$rid, $ballotToken, $pid]);
+                }
             }
 
             // Update round state to all_submitted if every signed-in coach has voted

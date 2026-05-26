@@ -365,6 +365,61 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .tag-yes   { color: #166534; font-weight: 700; }
 .tag-fresh { color: #166534; font-weight: 600; }
 
+/* Alternate-round rank badge on a coach ballot cell */
+.ballot-cell.ranked { background: var(--pink-bg); border-color: var(--pink); }
+.ballot-cell.ranked .ballot-cell-name { color: #cc0099; }
+.ballot-cell-rank {
+  margin-left: auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 40px; padding: 4px 10px;
+  background: var(--pink); color: #fff;
+  border-radius: 999px;
+  font-size: 13px; font-weight: 800; letter-spacing: .3px;
+}
+
+/* Admin alternate-round modal: candidate checkbox list */
+.alt-cand-list {
+  display: flex; flex-direction: column;
+  gap: 4px;
+  max-height: 320px; overflow-y: auto;
+  margin-top: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+}
+.alt-cand-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 8px; border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.alt-cand-row:hover { background: var(--bg3); }
+.alt-cand-row.checked { background: var(--pink-bg); }
+.alt-cand-row.checked .alt-cand-name { font-weight: 700; color: #cc0099; }
+.alt-cand-name   { flex: 1; }
+.alt-cand-jersey { font-size: 12px; color: var(--text3); }
+
+/* Outline variant of primary, for "Start Alternate Round" */
+.btn-primary-outline {
+  background: #fff;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.btn-primary-outline:hover { background: var(--pink-bg); }
+
+/* Alternate-round identifier pill on round cards */
+.pill-alt { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-weight: 800; }
+
+/* Alternate roster section + chip */
+.roster-section.alt-section { margin-top: 14px; border-top: 1px dashed var(--border-light); padding-top: 12px; }
+.chip-alt { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+.chip-alt-rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #92400e; color: #fff;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .3px;
+  margin-right: 2px;
+}
+
 /* Tables */
 .tbl { width: 100%; border-collapse: collapse; }
 .tbl th, .tbl td { padding: 8px 10px; text-align: left; font-size: 13px; }

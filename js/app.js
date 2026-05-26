@@ -10,7 +10,8 @@
     state: null,                // latest state.php payload
     pollTimer: null,
     pollMs: 2000,
-    selectedPicks: new Set(),   // round id-> picks
+    selectedPicks: new Set(),   // round id-> picks (regular rounds; unordered)
+    rankedPicks: [],            // ordered array (alternate rounds)
     activePicksRoundId: null,
     lastErr: '',
     confirmDialog: null,
@@ -476,95 +477,157 @@
     }
 
     // Active / all_submitted
-    const remaining = round.picks_per_coach - (ballot.picks ? ballot.picks.length : 0);
     const submittedNow = !!ballot.submitted;
+    const isAlternate = round.round_type === 'alternate';
 
-    // Initialize picks set from server-side draft/submitted on first render or round change
+    // Initialize picks state from server-side draft/submitted on first render or round change
     if (S.activePicksRoundId !== round.id) {
-      S.selectedPicks = new Set((ballot.picks || []).map(Number));
+      if (isAlternate) {
+        S.rankedPicks = (ballot.picks || []).map(Number);
+      } else {
+        S.selectedPicks = new Set((ballot.picks || []).map(Number));
+      }
       S.activePicksRoundId = round.id;
     }
 
     const grid = h('div', { class: 'ballot-grid' });
-    const sections = rosterSections(s);
-    let n = 0;
-    for (const sec of sections) {
-      if (sec.type === 'round') {
-        grid.append(h('div', { class: 'ballot-section-h' }, `Round ${sec.rn}`));
-        if (!sec.players.length) {
-          grid.append(h('div', { class: 'ballot-section-empty' }, 'No players were locked in this round.'));
-          continue;
-        }
-        for (const p of sec.players) {
-          n += 1;
-          grid.append(h('div', { class: 'ballot-cell locked' },
-            h('span', { class: 'ballot-cell-num' }, `${n}`),
-            h('span', { class: 'ballot-cell-name' }, p.name),
-            p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
-          ));
-        }
-      } else { // available section — clickable
-        if (!sec.players.length) continue;
-        grid.append(h('div', { class: 'ballot-section-h' }, 'Available'));
-        for (const p of sec.players) {
-          n += 1;
-          const checked = S.selectedPicks.has(p.id);
-          const tied    = wasTiedLastRound(s, p);
-          grid.append(h('div', {
-            class: `ballot-cell available ${checked ? 'checked' : ''} ${submittedNow ? 'submitted' : ''}`,
-            onclick: () => {
-              if (submittedNow) return;
-              if (S.selectedPicks.has(p.id)) S.selectedPicks.delete(p.id);
-              else {
-                if (S.selectedPicks.size >= round.picks_per_coach) {
-                  toast(`You can only pick ${round.picks_per_coach}`, 'warn');
-                  return;
-                }
-                S.selectedPicks.add(p.id);
+
+    if (isAlternate) {
+      // Alternate round: flat list of just the candidate players, with rank badges.
+      const candidateIds = new Set((round.candidate_ids || []).map(Number));
+      const allP = s.players || [];
+      const candPlayers = allP.filter(p => candidateIds.has(p.id));
+      // Order: ranked players first (in rank order), then unranked candidates in original sort
+      const rankIndex = new Map();
+      S.rankedPicks.forEach((id, i) => rankIndex.set(id, i));
+      candPlayers.sort((a, b) => {
+        const ai = rankIndex.has(a.id) ? rankIndex.get(a.id) : Infinity;
+        const bi = rankIndex.has(b.id) ? rankIndex.get(b.id) : Infinity;
+        if (ai !== bi) return ai - bi;
+        return 0;
+      });
+
+      grid.append(h('div', { class: 'ballot-section-h' }, `Candidates (${candPlayers.length})`));
+      let n = 0;
+      const ord = (i) => {
+        const s = ['th','st','nd','rd'], v = i % 100;
+        return i + (s[(v-20)%10] || s[v] || s[0]);
+      };
+      for (const p of candPlayers) {
+        n += 1;
+        const rankPos = rankIndex.has(p.id) ? rankIndex.get(p.id) + 1 : 0;
+        const ranked = rankPos > 0;
+        grid.append(h('div', {
+          class: `ballot-cell available ${ranked ? 'ranked' : ''} ${submittedNow ? 'submitted' : ''}`,
+          onclick: () => {
+            if (submittedNow) return;
+            const idx = S.rankedPicks.indexOf(p.id);
+            if (idx >= 0) {
+              S.rankedPicks.splice(idx, 1); // re-shift remaining ranks down
+            } else {
+              if (S.rankedPicks.length >= round.picks_per_coach) {
+                toast(`You can only rank ${round.picks_per_coach}. Tap a ranked player to remove first.`, 'warn');
+                return;
               }
-              saveDraftDebounced(round.id);
-              render();
+              S.rankedPicks.push(p.id);
             }
+            saveDraftDebounced(round.id);
+            render();
           },
-            h('span', { class: 'ballot-cell-num' }, `${n}`),
-            h('span', { class: 'ballot-cell-name' }, p.name),
-            p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
-            tied    ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
-            checked ? h('span', { class: 'ballot-cell-tag check' }, '✓ Picked') : null,
-          ));
+        },
+          h('span', { class: 'ballot-cell-num' }, `${n}`),
+          h('span', { class: 'ballot-cell-name' }, p.name),
+          p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
+          ranked ? h('span', { class: 'ballot-cell-rank' }, `${ord(rankPos)}`) : null,
+        ));
+      }
+    } else {
+      // Regular round: existing sectioned roster grid
+      const sections = rosterSections(s);
+      let n = 0;
+      for (const sec of sections) {
+        if (sec.type === 'round') {
+          grid.append(h('div', { class: 'ballot-section-h' }, `Round ${sec.rn}`));
+          if (!sec.players.length) {
+            grid.append(h('div', { class: 'ballot-section-empty' }, 'No players were locked in this round.'));
+            continue;
+          }
+          for (const p of sec.players) {
+            n += 1;
+            grid.append(h('div', { class: 'ballot-cell locked' },
+              h('span', { class: 'ballot-cell-num' }, `${n}`),
+              h('span', { class: 'ballot-cell-name' }, p.name),
+              p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
+            ));
+          }
+        } else { // available section — clickable
+          if (!sec.players.length) continue;
+          grid.append(h('div', { class: 'ballot-section-h' }, 'Available'));
+          for (const p of sec.players) {
+            n += 1;
+            const checked = S.selectedPicks.has(p.id);
+            const tied    = wasTiedLastRound(s, p);
+            grid.append(h('div', {
+              class: `ballot-cell available ${checked ? 'checked' : ''} ${submittedNow ? 'submitted' : ''}`,
+              onclick: () => {
+                if (submittedNow) return;
+                if (S.selectedPicks.has(p.id)) S.selectedPicks.delete(p.id);
+                else {
+                  if (S.selectedPicks.size >= round.picks_per_coach) {
+                    toast(`You can only pick ${round.picks_per_coach}`, 'warn');
+                    return;
+                  }
+                  S.selectedPicks.add(p.id);
+                }
+                saveDraftDebounced(round.id);
+                render();
+              }
+            },
+              h('span', { class: 'ballot-cell-num' }, `${n}`),
+              h('span', { class: 'ballot-cell-name' }, p.name),
+              p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
+              tied    ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
+              checked ? h('span', { class: 'ballot-cell-tag check' }, '✓ Picked') : null,
+            ));
+          }
         }
       }
     }
 
     // Submit bar
-    const pickedCount = S.selectedPicks.size;
+    const pickedCount = isAlternate ? S.rankedPicks.length : S.selectedPicks.size;
     const submitOK = pickedCount === round.picks_per_coach && !submittedNow;
+    const verb     = isAlternate ? 'ranked' : 'selected';
+    const remaining = round.picks_per_coach - pickedCount;
     const submitBar = h('div', { class: 'submit-bar' },
       h('div', { class: 'pick-counter' },
         submittedNow
           ? h('span', { class: 'ok' }, '✓ Your ballot has been submitted. Waiting for results…')
           : (pickedCount === round.picks_per_coach
-              ? `Ready: ${pickedCount} / ${round.picks_per_coach} selected`
-              : `${pickedCount} / ${round.picks_per_coach} selected — ${remaining} more to pick`)
+              ? `Ready: ${pickedCount} of ${round.picks_per_coach} ${verb}`
+              : `${pickedCount} of ${round.picks_per_coach} ${verb} — ${remaining} more to ${isAlternate ? 'rank' : 'pick'}`)
       ),
       !submittedNow ? h('button', {
         class: 'btn btn-primary btn-lg',
         disabled: !submitOK,
         onclick: () => {
+          const orderedIds = isAlternate ? [...S.rankedPicks] : Array.from(S.selectedPicks);
           confirmDialog(
-            'Submit ballot?',
-            `You are about to lock in ${pickedCount} picks. After submitting you cannot change them unless the admin resets your ballot.`,
+            isAlternate ? 'Submit ranked ballot?' : 'Submit ballot?',
+            isAlternate
+              ? `You are about to submit your ranked picks: ${orderedIds.length} alternates in order. After submitting you cannot change them unless the admin resets your ballot.`
+              : `You are about to lock in ${pickedCount} picks. After submitting you cannot change them unless the admin resets your ballot.`,
             async () => {
               try {
-                await api('ballot', 'submit', { round_id: round.id, player_ids: Array.from(S.selectedPicks) });
+                await api('ballot', 'submit', { round_id: round.id, player_ids: orderedIds });
                 toast('Ballot submitted.', 'success');
                 pollOnce();
               } catch (e) { toast(e.message, 'error'); }
             },
-            'Submit ballot'
+            isAlternate ? 'Submit ranked ballot' : 'Submit ballot'
           );
         }
-      }, 'Submit Ballot') : null,
+      }, isAlternate ? 'Submit Ranked Ballot' : 'Submit Ballot') : null,
     );
 
     root.append(
@@ -586,7 +649,11 @@
   function saveDraftDebounced(roundId) {
     if (_saveDraftTimer) clearTimeout(_saveDraftTimer);
     _saveDraftTimer = setTimeout(() => {
-      api('ballot', 'save_draft', { round_id: roundId, player_ids: Array.from(S.selectedPicks) }).catch(() => {});
+      const r = S.state && S.state.round;
+      const ids = (r && r.round_type === 'alternate')
+        ? [...S.rankedPicks]
+        : Array.from(S.selectedPicks);
+      api('ballot', 'save_draft', { round_id: roundId, player_ids: ids }).catch(() => {});
     }, 400);
   }
 
@@ -696,16 +763,21 @@
     const showCounts = !!opts.showCounts;
     const players = s.players || [];
     const locked  = s.locked || [];
+    const mainLocked = locked.filter(l => l.alternate_rank == null);
+    const altLocked  = locked.filter(l => l.alternate_rank != null)
+                             .slice().sort((a, b) => (a.alternate_rank || 0) - (b.alternate_rank || 0));
     const max     = s.election && s.election.max_roster_size ? s.election.max_roster_size : null;
-    const heading = (n) => max ? `Locked Roster (${n} / ${max})` : `Locked Roster (${n})`;
+    const headingMain = (n) => max ? `Locked Roster (${n} / ${max})` : `Locked Roster (${n})`;
+
     if (!locked.length) return h('div', { class: 'roster-panel' },
-      h('h3', {}, heading(0)),
+      h('h3', {}, headingMain(0)),
       h('div', { class: 'muted' }, 'No players locked in yet.'),
     );
+
     const tallies = s.round_tallies || {};
     const byRound = {};
-    for (const l of locked) (byRound[l.locked_in_round] ||= []).push(l.player_id);
-    const sectionEls = Object.keys(byRound).sort((a,b)=>a-b).map(rn => {
+    for (const l of mainLocked) (byRound[l.locked_in_round] ||= []).push(l.player_id);
+    const mainSections = Object.keys(byRound).sort((a,b)=>a-b).map(rn => {
       const tally = tallies[rn] || {};
       return h('div', { class: 'roster-section' },
         h('h4', {}, `Round ${rn}`),
@@ -718,9 +790,31 @@
         ),
       );
     });
+
+    const ord = (i) => {
+      const sf = ['th','st','nd','rd'], v = i % 100;
+      return i + (sf[(v-20)%10] || sf[v] || sf[0]);
+    };
+    const altSection = altLocked.length ? h('div', { class: 'roster-section alt-section' },
+      h('h4', {}, `Alternates (${altLocked.length})`),
+      h('div', { class: 'chips' },
+        ...altLocked.map(l => {
+          const p = players.find(x => x.id === l.player_id) || { name: `#${l.player_id}`, jersey: null };
+          const c = showCounts ? ((tallies[l.locked_in_round] || {})[l.player_id] ?? null) : null;
+          return h('div', { class: 'chip chip-winner chip-alt' },
+            h('span', { class: 'chip-alt-rank' }, `${ord(l.alternate_rank)} alt`),
+            h('span', { class: 'chip-name' }, p.name),
+            p.jersey ? h('span', { class: 'chip-jersey' }, `#${p.jersey}`) : null,
+            c != null ? h('span', { class: 'chip-count' }, `${c} ${c === 1 ? 'pt' : 'pts'}`) : null,
+          );
+        })
+      ),
+    ) : null;
+
     return h('div', { class: 'roster-panel' },
-      h('h3', {}, heading(locked.length)),
-      ...sectionEls,
+      h('h3', {}, headingMain(mainLocked.length)),
+      ...mainSections,
+      altSection,
     );
   }
 
@@ -854,8 +948,10 @@
             // No active round (either no rounds yet or latest is finalized) → Start Next + Finalize All
             return null;
           })(),
-          // Between-rounds buttons: start another or finalize the election
+          // Between-rounds buttons: start another, start an alternate round, or finalize the election
           e.status === 'active' && (!cr || cr.state === 'finalized') ? h('button', { class: 'btn btn-primary', onclick: () => startNext(cr) }, '▶ Start Next Round') : null,
+          e.status === 'active' && (!cr || cr.state === 'finalized') && hasAnyFinalizedRound(s)
+            ? h('button', { class: 'btn btn-primary-outline', onclick: () => openAlternateRoundModal() }, '★ Start Alternate Round') : null,
           e.status === 'active' && (!cr || cr.state === 'finalized') ? h('button', { class: 'btn btn-secondary', onclick: completeElection }, '✓ Finalize All Rounds') : null,
         ),
       ),
@@ -926,13 +1022,17 @@
   // finalized rounds collapsed (user clicks override the default).
   function renderRoundCard(s, round) {
     const rn = round.round_num;
+    const isAlt = round.round_type === 'alternate';
     // Default: only the highest round_num is expanded — focus on the most
     // recent round regardless of whether it's active or freshly finalized.
     const defaultOpen = rn === S.lastMaxRoundNum;
     const isOpen = S.roundOverride.has(rn) ? S.roundOverride.get(rn) : defaultOpen;
     const tally  = (s.round_tallies && s.round_tallies[rn]) || {};
     const tiedSet   = new Set((s.round_tied_ids && s.round_tied_ids[rn]) || []);
-    const lockedSet = new Set((s.locked || []).filter(l => l.locked_in_round === rn).map(l => l.player_id));
+    const lockedRows = (s.locked || []).filter(l => l.locked_in_round === rn);
+    const lockedSet = new Set(lockedRows.map(l => l.player_id));
+    // Map locked-this-round player_id → alternate_rank (for alternate rounds)
+    const altRankByPid = new Map(lockedRows.map(l => [l.player_id, l.alternate_rank]));
     const players = s.players || [];
 
     const sortedIds = Object.keys(tally).map(Number).sort((a, b) => {
@@ -941,14 +1041,22 @@
       return a - b;
     });
 
+    const ord = (i) => {
+      const sf = ['th','st','nd','rd'], v = i % 100;
+      return i + (sf[(v-20)%10] || sf[v] || sf[0]);
+    };
+
     const header = h('div', {
       class: 'round-card-h',
       onclick: () => { S.roundOverride.set(rn, !isOpen); render(); },
     },
       h('span', { class: 'round-card-chevron' }, isOpen ? '▾' : '▸'),
       h('h3', {}, `Round ${rn}`),
+      isAlt ? h('span', { class: 'pill pill-alt' }, '★ ALTERNATES') : null,
       h('span', { class: `pill pill-${round.state}` }, round.state.replace('_', ' ')),
-      h('span', { class: 'micro' }, `Pick ${round.picks_per_coach}, lock ${round.picks_to_lock}`),
+      h('span', { class: 'micro' }, isAlt
+        ? `Rank ${round.picks_per_coach}, lock ${round.picks_to_lock} alt${round.picks_to_lock === 1 ? '' : 's'}`
+        : `Pick ${round.picks_per_coach}, lock ${round.picks_to_lock}`),
       round.has_tie_at_cutoff ? h('span', { class: 'pill pill-warn' }, '⚠ tie at cutoff') : null,
     );
 
@@ -964,7 +1072,7 @@
             h('thead', {}, h('tr', {},
               h('th', {}, 'Player'),
               h('th', {}, 'Jersey'),
-              h('th', {}, 'Votes'),
+              h('th', {}, isAlt ? 'Borda pts' : 'Votes'),
               h('th', {}, 'Status'),
               h('th', {}, ''),
             )),
@@ -972,21 +1080,26 @@
               const p = players.find(pl => pl.id === pid) || { name: `#${pid}`, jersey: null };
               const isLocked = lockedSet.has(pid);
               const isTied   = tiedSet.has(pid);
+              const altRank  = altRankByPid.get(pid);
+              const statusCell = isLocked
+                ? (isAlt && altRank
+                    ? h('span', { class: 'pill pill-active' }, `✓ ${ord(altRank)} alternate`)
+                    : h('span', { class: 'pill pill-active' }, '✓ locked this round'))
+                : (isTied ? h('span', { class: 'pill pill-warn' }, '⚖ tied at cutoff') : null);
+              // For alternate rounds, no inline Lock-in button — admin resolves
+              // the tie by starting another alternate round between tied players.
+              const actionCell = isAlt
+                ? null
+                : (isTied ? h('button', {
+                    class: 'btn btn-sm btn-primary',
+                    onclick: (ev) => { ev.stopPropagation(); lockTiedPlayer(p, rn); },
+                  }, `Lock in for Round ${rn}`) : null);
               return h('tr', { class: isLocked ? 'row-locked' : (isTied ? 'row-tied' : '') },
                 h('td', {}, p.name),
                 h('td', {}, p.jersey || ''),
                 h('td', {}, String(tally[pid])),
-                h('td', {},
-                  isLocked ? h('span', { class: 'pill pill-active' }, '✓ locked this round')
-                  : isTied ? h('span', { class: 'pill pill-warn' }, '⚖ tied at cutoff')
-                  : null,
-                ),
-                h('td', { class: 'tally-action' },
-                  isTied ? h('button', {
-                    class: 'btn btn-sm btn-primary',
-                    onclick: (ev) => { ev.stopPropagation(); lockTiedPlayer(p, rn); },
-                  }, `Lock in for Round ${rn}`) : null,
-                ),
+                h('td', {}, statusCell),
+                h('td', { class: 'tally-action' }, actionCell),
               );
             }))
           ),
@@ -1499,6 +1612,92 @@
   function completeElection() {
     confirmDialog('Finalize all rounds?', 'Mark this election as complete. Coaches will keep their access but no new rounds can be started.',
       async () => { try { await api('rounds', 'complete_election', {}); pollOnce(); } catch (e) { toast(e.message, 'error'); } });
+  }
+
+  function hasAnyFinalizedRound(s) {
+    return (s.rounds || []).some(r => r.state === 'finalized');
+  }
+
+  // ── Admin: Start Alternate Round modal ─────────────────────────────────────
+  async function openAlternateRoundModal() {
+    let data;
+    try { data = await api('rounds', 'alternate_candidates'); }
+    catch (e) { toast(e.message, 'error'); return; }
+
+    const allActive  = data.all_active || [];
+    const priorVotes = new Set((data.with_prior_votes || []).map(Number));
+    const priorTie   = new Set((data.prior_tie || []).map(Number));
+    const isTieResolution = priorTie.size > 0;
+    const defaultsChecked = isTieResolution ? priorTie : priorVotes;
+    const defaultSlots = data.suggested_slots > 0
+      ? data.suggested_slots
+      : Math.min(3, allActive.length);
+
+    const overlay = h('div', { class: 'overlay' });
+    const slotsIn = h('input', { type: 'number', min: 1, value: defaultSlots });
+    const candList = h('div', { class: 'alt-cand-list' });
+    const selected = new Set();
+    for (const p of allActive) if (defaultsChecked.has(p.id)) selected.add(p.id);
+
+    function redrawCandList() {
+      clear(candList);
+      for (const p of allActive) {
+        const checked = selected.has(p.id);
+        const row = h('label', { class: 'alt-cand-row' + (checked ? ' checked' : '') },
+          h('input', {
+            type: 'checkbox',
+            onchange: (ev) => {
+              if (ev.target.checked) selected.add(p.id); else selected.delete(p.id);
+              redrawCandList();
+            },
+          }),
+          h('span', { class: 'alt-cand-name' }, p.name),
+          p.jersey ? h('span', { class: 'alt-cand-jersey' }, `#${p.jersey}`) : null,
+        );
+        if (checked) row.querySelector('input').checked = true;
+        candList.append(row);
+      }
+    }
+    redrawCandList();
+
+    const submit = async () => {
+      const slots = parseInt(slotsIn.value, 10);
+      if (!(slots >= 1)) { toast('Alternates count must be ≥ 1', 'error'); return; }
+      const candidate_ids = [...selected];
+      if (candidate_ids.length < 2) { toast('Pick at least 2 candidates', 'error'); return; }
+      if (slots > candidate_ids.length) { toast(`Can't lock ${slots} alternates with only ${candidate_ids.length} candidates`, 'error'); return; }
+      try {
+        const r = await api('rounds', 'start_alternate', {
+          picks_per_coach: slots,
+          picks_to_lock: slots,
+          candidate_ids,
+        });
+        overlay.remove();
+        pollOnce();
+        toast(`Alternate round ${r.round_num} started.`, 'success');
+      } catch (e) { toast(e.message, 'error'); }
+    };
+
+    overlay.append(h('div', { class: 'modal modal-lg' },
+      h('h3', {}, isTieResolution ? 'Resolve alternate tie' : 'Start alternate round'),
+      h('p', { class: 'muted' }, isTieResolution
+        ? `The previous alternate round had a tie at cutoff. Coaches will re-rank the tied players to break it — you can also add other candidates if you want.`
+        : `Coaches will rank the chosen candidates. The top players by Borda count become alternates in that order.`),
+      h('div', { class: 'form-grid' },
+        h('label', {}, 'Alternates to lock in'), slotsIn,
+      ),
+      h('div', { class: 'sep' }, `Candidates (${allActive.length} available)`),
+      h('p', { class: 'muted', style: { marginTop: '4px' } },
+        isTieResolution
+          ? 'Tied players from the previous alternate round are pre-checked.'
+          : 'Players who got votes in any finalized round are pre-checked. Add others as needed.'),
+      candList,
+      h('div', { class: 'modal-actions' },
+        h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Cancel'),
+        h('button', { class: 'btn btn-primary', onclick: submit }, '★ Start Alternate Round'),
+      ),
+    ));
+    document.body.append(overlay);
   }
 
   // ── Create election wizard ────────────────────────────────────────────────

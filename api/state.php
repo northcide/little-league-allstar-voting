@@ -25,17 +25,21 @@ try {
         $players = $db->prepare("SELECT id, name, jersey FROM players WHERE election_id=? AND active=1 ORDER BY sort_order, name");
         $players->execute([$eid]);
 
-        $locked = $db->prepare("SELECT player_id, locked_in_round FROM locked_roster WHERE election_id=? ORDER BY locked_in_round, player_id");
+        $locked = $db->prepare("SELECT player_id, locked_in_round, alternate_rank FROM locked_roster WHERE election_id=? ORDER BY (alternate_rank IS NULL) DESC, locked_in_round, alternate_rank, player_id");
         $locked->execute([$eid]);
 
         // Per-round vote tallies for finalized rounds (touches ballot_picks only — anonymity boundary preserved).
-        // Keyed by round_num so admin + coach views can both look it up from locked_in_round / round.round_num.
+        // Same CASE expression as the admin view so alternate rounds report Borda scores.
         $tStmt = $db->prepare(
-            "SELECT r.round_num, bp.player_id, COUNT(*) AS cnt
+            "SELECT r.round_num,
+                    bp.player_id,
+                    CASE WHEN r.round_type = 'alternate'
+                         THEN SUM(r.picks_per_coach + 1 - bp.`rank`)
+                         ELSE COUNT(*) END AS cnt
              FROM ballot_picks bp
              JOIN rounds r ON r.id = bp.round_id
              WHERE r.election_id = ? AND r.state = 'finalized'
-             GROUP BY r.round_num, bp.player_id"
+             GROUP BY r.round_num, r.round_type, bp.player_id"
         );
         $tStmt->execute([$eid]);
         $roundTallies = [];
@@ -86,19 +90,28 @@ try {
                 'round_num'         => (int)$round['round_num'],
                 'picks_per_coach'   => (int)$round['picks_per_coach'],
                 'picks_to_lock'     => (int)$round['picks_to_lock'],
+                'round_type'        => $round['round_type'] ?? 'regular',
                 'state'             => $round['state'],
                 'has_tie_at_cutoff' => (bool)$round['has_tie_at_cutoff'],
             ];
 
+            // For alternate rounds, expose the candidate whitelist so the coach
+            // ballot can show just those players.
+            if (($round['round_type'] ?? 'regular') === 'alternate') {
+                $cStmt = $db->prepare("SELECT player_id FROM round_candidates WHERE round_id=?");
+                $cStmt->execute([(int)$round['id']]);
+                $resp['round']['candidate_ids'] = array_map('intval', $cStmt->fetchAll(PDO::FETCH_COLUMN));
+            }
+
             if ($round['state'] === 'finalized') {
-                $win = $db->prepare("SELECT player_id FROM locked_roster WHERE election_id=? AND locked_in_round=?");
+                $win = $db->prepare("SELECT player_id, alternate_rank FROM locked_roster WHERE election_id=? AND locked_in_round=? ORDER BY alternate_rank IS NULL, alternate_rank, player_id");
                 $win->execute([$eid, (int)$round['round_num']]);
                 $resp['round']['winners'] = array_map(fn($r) => (int)$r['player_id'], $win->fetchAll());
                 $resp['round']['tie_player_ids'] = array_values(json_decode($round['tie_player_ids_json'] ?? 'null', true) ?: []);
             }
 
             if ($subRow) {
-                $picks = $db->prepare("SELECT player_id FROM ballot_picks WHERE round_id=? AND ballot_token=?");
+                $picks = $db->prepare("SELECT player_id FROM ballot_picks WHERE round_id=? AND ballot_token=? ORDER BY (`rank` IS NULL), `rank`, id");
                 $picks->execute([(int)$round['id'], $subRow['ballot_token']]);
                 $resp['ballot'] = [
                     'submitted' => true,
@@ -136,9 +149,9 @@ try {
 
         $players = $db->prepare("SELECT id, name, jersey, sort_order, active FROM players WHERE election_id=? ORDER BY sort_order, name");
         $players->execute([$eid]);
-        $rounds  = $db->prepare("SELECT id, round_num, picks_per_coach, picks_to_lock, state, has_tie_at_cutoff, tie_player_ids_json, finalized_at FROM rounds WHERE election_id=? ORDER BY round_num");
+        $rounds  = $db->prepare("SELECT id, round_num, picks_per_coach, picks_to_lock, round_type, state, has_tie_at_cutoff, tie_player_ids_json, finalized_at FROM rounds WHERE election_id=? ORDER BY round_num");
         $rounds->execute([$eid]);
-        $locked  = $db->prepare("SELECT player_id, locked_in_round FROM locked_roster WHERE election_id=? ORDER BY locked_in_round, player_id");
+        $locked  = $db->prepare("SELECT player_id, locked_in_round, alternate_rank FROM locked_roster WHERE election_id=? ORDER BY (alternate_rank IS NULL) DESC, locked_in_round, alternate_rank, player_id");
         $locked->execute([$eid]);
 
         // Voter codes — derive state badges; never include picks
@@ -188,13 +201,20 @@ try {
 
         $loggedIn = count(array_filter($codes, fn($c) => $c['logged_in'] || $c['submitted']));
 
-        // Per-round vote tallies for finalized rounds (touches ballot_picks only)
+        // Per-round vote tallies for finalized rounds (touches ballot_picks only).
+        // For alternate rounds, cnt = Borda score (sum of picks_per_coach + 1 - rank).
+        // For regular rounds, cnt = raw vote count.
         $tStmt = $db->prepare(
-            "SELECT r.round_num, bp.player_id, COUNT(*) AS cnt
+            "SELECT r.round_num,
+                    r.round_type,
+                    bp.player_id,
+                    CASE WHEN r.round_type = 'alternate'
+                         THEN SUM(r.picks_per_coach + 1 - bp.`rank`)
+                         ELSE COUNT(*) END AS cnt
              FROM ballot_picks bp
              JOIN rounds r ON r.id = bp.round_id
              WHERE r.election_id = ? AND r.state = 'finalized'
-             GROUP BY r.round_num, bp.player_id"
+             GROUP BY r.round_num, r.round_type, bp.player_id"
         );
         $tStmt->execute([$eid]);
         $roundTallies = [];
@@ -215,6 +235,17 @@ try {
             $roundTiedIds[(int)$row['round_num']] = array_values(array_map('intval', $ids));
         }
 
+        // Candidate whitelist for any active alternate round, so the admin dashboard
+        // can label rows / coach UIs scope to it. Keyed by round_id (only active alt rounds).
+        $candMap = [];
+        foreach ($allRounds as $r) {
+            if (($r['round_type'] ?? 'regular') === 'alternate' && in_array($r['state'], ['active','all_submitted'], true)) {
+                $cStmt = $db->prepare("SELECT player_id FROM round_candidates WHERE round_id=?");
+                $cStmt->execute([(int)$r['id']]);
+                $candMap[(int)$r['id']] = array_map('intval', $cStmt->fetchAll(PDO::FETCH_COLUMN));
+            }
+        }
+
         $resp['election'] = $e;
         $resp['players']  = $players->fetchAll();
         $resp['rounds']   = $allRounds;
@@ -223,6 +254,7 @@ try {
         $resp['current_round'] = $currentRound;
         $resp['round_tallies'] = $roundTallies;
         $resp['round_tied_ids'] = $roundTiedIds;
+        $resp['round_candidates'] = $candMap;
         $signedIn = count(array_filter($codes, fn($c) => !$c['revoked']));
         $resp['counts']   = [
             'signed_in'     => $signedIn,

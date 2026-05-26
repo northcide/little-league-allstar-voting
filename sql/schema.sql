@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS rounds (
   round_num               INT NOT NULL,
   picks_per_coach         INT NOT NULL,
   picks_to_lock           INT NOT NULL,
+  round_type              ENUM('regular','alternate') NOT NULL DEFAULT 'regular',
   state                   ENUM('pending','active','all_submitted','finalized') NOT NULL DEFAULT 'pending',
   finalized_at            DATETIME DEFAULT NULL,
   finalized_by_override   TINYINT(1) NOT NULL DEFAULT 0,
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS ballot_picks (
   round_id      INT NOT NULL,
   ballot_token  CHAR(32) NOT NULL,
   player_id     INT NOT NULL,
+  `rank`        INT DEFAULT NULL,
   INDEX idx_round_player (round_id, player_id),
   INDEX idx_round_token  (round_id, ballot_token),
   FOREIGN KEY (round_id)  REFERENCES rounds(id)  ON DELETE CASCADE,
@@ -104,12 +106,25 @@ CREATE TABLE IF NOT EXISTS locked_roster (
   election_id     INT NOT NULL,
   player_id       INT NOT NULL,
   locked_in_round INT NOT NULL,
+  alternate_rank  INT DEFAULT NULL,
   was_manual      TINYINT(1) NOT NULL DEFAULT 0,
   locked_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uniq_election_player (election_id, player_id),
   INDEX idx_election_round (election_id, locked_in_round),
   FOREIGN KEY (election_id) REFERENCES elections(id) ON DELETE CASCADE,
   FOREIGN KEY (player_id)   REFERENCES players(id)   ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ── Round candidates (only populated for alternate rounds) ────────────────────
+-- Restricts which players coaches can rank in this round. When empty for a
+-- round, eligibility falls back to "any active, non-locked player" (the
+-- existing regular-round behavior).
+CREATE TABLE IF NOT EXISTS round_candidates (
+  round_id  INT NOT NULL,
+  player_id INT NOT NULL,
+  PRIMARY KEY (round_id, player_id),
+  FOREIGN KEY (round_id)  REFERENCES rounds(id)  ON DELETE CASCADE,
+  FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ── Audit log (admin overrides + sensitive state changes) ─────────────────────
