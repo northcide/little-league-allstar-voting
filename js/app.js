@@ -17,7 +17,8 @@
     view: 'login',
     adminSubview: 'dashboard',  // dashboard | setup | codes | results | overrides | audit
     roundOverride: new Map(),   // round_num → bool (true=expanded, false=collapsed). Absent → default
-    lastMaxRoundNum: 0,         // for auto-resetting roundOverride when a new round appears
+    lastMaxRoundNum: 0,         // tracks the highest round_num seen
+    lastFocusKey: '',           // "<round_num>:<state>" of the latest round — reset overrides when this changes
   };
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
@@ -803,12 +804,18 @@
     const cr = s.current_round;
     const counts = s.counts || {};
 
-    // Reset round-card expand/collapse overrides whenever a new round appears
-    // (or the most-recent round_num changes). Keeps focus on the most recent round.
+    // Reset round-card expand/collapse overrides whenever the focus round
+    // changes — either a new higher round_num appears, or the existing
+    // highest round transitions state (e.g. active → finalized). This keeps
+    // focus on the most recent round in any of those situations, while still
+    // letting user clicks expand older rounds for review.
     const rounds = s.rounds || [];
     const maxRn = rounds.length ? Math.max(...rounds.map(r => r.round_num)) : 0;
-    if (maxRn !== S.lastMaxRoundNum) {
+    const maxRound = rounds.find(r => r.round_num === maxRn);
+    const focusKey = maxRound ? `${maxRn}:${maxRound.state}` : '0:none';
+    if (focusKey !== S.lastFocusKey) {
       S.roundOverride.clear();
+      S.lastFocusKey = focusKey;
       S.lastMaxRoundNum = maxRn;
     }
     // Build through h() so null children are filtered instead of stringified to "null".
