@@ -1636,29 +1636,71 @@
     const overlay = h('div', { class: 'overlay' });
     const slotsIn = h('input', { type: 'number', min: 1, value: defaultSlots });
     const candList = h('div', { class: 'alt-cand-list' });
+    const selectedCountEl = h('span', { class: 'alt-cand-count' }, '');
     const selected = new Set();
     for (const p of allActive) if (defaultsChecked.has(p.id)) selected.add(p.id);
+
+    // Players that got votes in any prior round — always visually marked so they
+    // stay distinguishable from other players the admin later adds.
+    const priorMarker = isTieResolution ? priorTie : priorVotes;
+
+    function refreshSelectedCount() {
+      selectedCountEl.textContent = `${selected.size} of ${allActive.length} selected`;
+    }
 
     function redrawCandList() {
       clear(candList);
       for (const p of allActive) {
         const checked = selected.has(p.id);
-        const row = h('label', { class: 'alt-cand-row' + (checked ? ' checked' : '') },
+        const isPrior = priorMarker.has(p.id);
+        const cls = ['alt-cand-row'];
+        if (checked) cls.push('checked');
+        if (isPrior) cls.push('prior');
+        const row = h('label', { class: cls.join(' ') },
           h('input', {
             type: 'checkbox',
             onchange: (ev) => {
               if (ev.target.checked) selected.add(p.id); else selected.delete(p.id);
               redrawCandList();
+              refreshSelectedCount();
             },
           }),
           h('span', { class: 'alt-cand-name' }, p.name),
           p.jersey ? h('span', { class: 'alt-cand-jersey' }, `#${p.jersey}`) : null,
+          isPrior ? h('span', { class: 'alt-cand-prior-badge' },
+            isTieResolution ? '⚖ tied last round' : '★ prior votes') : null,
         );
         if (checked) row.querySelector('input').checked = true;
         candList.append(row);
       }
     }
     redrawCandList();
+    refreshSelectedCount();
+
+    const selectAllBtn = h('button', {
+      class: 'btn btn-sm btn-secondary',
+      onclick: (ev) => {
+        ev.preventDefault();
+        if (selected.size === allActive.length) {
+          selected.clear();
+        } else {
+          for (const p of allActive) selected.add(p.id);
+        }
+        redrawCandList();
+        refreshSelectedCount();
+      },
+    }, 'Select all / none');
+
+    const selectPriorBtn = priorMarker.size ? h('button', {
+      class: 'btn btn-sm btn-secondary',
+      onclick: (ev) => {
+        ev.preventDefault();
+        selected.clear();
+        for (const p of allActive) if (priorMarker.has(p.id)) selected.add(p.id);
+        redrawCandList();
+        refreshSelectedCount();
+      },
+    }, isTieResolution ? 'Just tied players' : 'Just prior vote-getters') : null;
 
     const submit = async () => {
       const slots = parseInt(slotsIn.value, 10);
@@ -1691,6 +1733,11 @@
         isTieResolution
           ? 'Tied players from the previous alternate round are pre-checked.'
           : 'Players who got votes in any finalized round are pre-checked. Add others as needed.'),
+      h('div', { class: 'alt-cand-toolbar' },
+        selectAllBtn,
+        selectPriorBtn,
+        selectedCountEl,
+      ),
       candList,
       h('div', { class: 'modal-actions' },
         h('button', { class: 'btn btn-secondary', onclick: () => overlay.remove() }, 'Cancel'),

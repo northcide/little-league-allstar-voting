@@ -378,23 +378,43 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 }
 
 /* Admin alternate-round modal: candidate checkbox list */
+.alt-cand-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  margin: 8px 0 4px;
+}
+.alt-cand-count { margin-left: auto; font-size: 12px; color: var(--text3); }
 .alt-cand-list {
   display: flex; flex-direction: column;
   gap: 4px;
   max-height: 320px; overflow-y: auto;
-  margin-top: 8px;
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   padding: 6px;
 }
 .alt-cand-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 6px 8px; border-radius: var(--radius-sm);
+  padding: 6px 10px; border-radius: var(--radius-sm);
   cursor: pointer;
+  border-left: 3px solid transparent;
 }
 .alt-cand-row:hover { background: var(--bg3); }
 .alt-cand-row.checked { background: var(--pink-bg); }
 .alt-cand-row.checked .alt-cand-name { font-weight: 700; color: #cc0099; }
+/* Prior vote-getters: always-on left border + amber badge, so they remain
+   visually distinct from newly-added candidates even after both get checked. */
+.alt-cand-row.prior {
+  border-left: 3px solid #f59e0b;
+  background: linear-gradient(to right, #fef3c7 0%, #fef3c7 6px, transparent 6px);
+}
+.alt-cand-row.prior.checked {
+  background: linear-gradient(to right, #fef3c7 0%, #fef3c7 6px, var(--pink-bg) 6px);
+}
+.alt-cand-prior-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .4px;
+  padding: 2px 7px; border-radius: 999px;
+  background: #92400e; color: #fff; text-transform: uppercase;
+  white-space: nowrap;
+}
 .alt-cand-name   { flex: 1; }
 .alt-cand-jersey { font-size: 12px; color: var(--text3); }
 
