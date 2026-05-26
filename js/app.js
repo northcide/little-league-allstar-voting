@@ -577,72 +577,74 @@
         ));
       }
     } else {
-      // Regular round: existing sectioned roster grid
+      // Regular round: Available section first, then completed rounds collapsed below.
       const sections = rosterSections(s);
       const ord = (i) => {
         const sf = ['th','st','nd','rd'], v = i % 100;
         return i + (sf[(v-20)%10] || sf[v] || sf[0]);
       };
       let n = 0;
-      for (const sec of sections) {
-        if (sec.type === 'round') {
-          const sectionLabel = sec.isAlt ? `★ Alternate Round ${sec.rn}` : `Round ${sec.rn}`;
-          const count = sec.players.length;
-          const det = h('details', { class: `ballot-round-group${sec.isAlt ? ' alt' : ''}` });
-          det.append(h('summary', { class: `ballot-section-h${sec.isAlt ? ' alt' : ''}` },
-            h('span', { class: 'ballot-section-label' }, sectionLabel),
-            h('span', { class: 'ballot-section-meta' }, count ? `${count} locked` : 'no players'),
-          ));
-          if (!count) {
-            det.append(h('div', { class: 'ballot-section-empty' },
-              sec.isAlt ? 'No alternates locked in this round.' : 'No players were locked in this round.'));
-          } else {
-            for (const p of sec.players) {
-              n += 1;
-              det.append(h('div', { class: `ballot-cell locked${sec.isAlt ? ' alt' : ''}` },
-                h('span', { class: 'ballot-cell-num' }, `${n}`),
-                sec.isAlt && p.alternate_rank
-                  ? h('span', { class: 'ballot-cell-altrank' }, ord(p.alternate_rank))
-                  : null,
-                h('span', { class: 'ballot-cell-name' }, p.name),
-                p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
-              ));
+      const availSec = sections.find(sec => sec.type === 'available');
+      const roundSecs = sections.filter(sec => sec.type === 'round');
+
+      if (availSec && availSec.players.length) {
+        grid.append(h('div', { class: 'ballot-section-h available-h' },
+          h('span', { class: 'ballot-section-label' }, 'Available'),
+        ));
+        for (const p of availSec.players) {
+          n += 1;
+          const checked = S.selectedPicks.has(p.id);
+          const tied    = wasTiedLastRound(s, p);
+          grid.append(h('div', {
+            class: `ballot-cell available ${checked ? 'checked' : ''} ${submittedNow ? 'submitted' : ''}`,
+            onclick: () => {
+              if (submittedNow) return;
+              if (S.selectedPicks.has(p.id)) S.selectedPicks.delete(p.id);
+              else {
+                if (S.selectedPicks.size >= round.picks_per_coach) {
+                  toast(`You can only pick ${round.picks_per_coach}`, 'warn');
+                  return;
+                }
+                S.selectedPicks.add(p.id);
+              }
+              saveDraftDebounced(round.id);
+              render();
             }
-          }
-          grid.append(det);
-        } else { // available section — clickable
-          if (!sec.players.length) continue;
-          grid.append(h('div', { class: 'ballot-section-h available-h' },
-            h('span', { class: 'ballot-section-label' }, 'Available'),
+          },
+            h('span', { class: 'ballot-cell-num' }, `${n}`),
+            h('span', { class: 'ballot-cell-name' }, p.name),
+            p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
+            tied    ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
+            checked ? h('span', { class: 'ballot-cell-tag check' }, '✓ Picked') : null,
           ));
+        }
+      }
+
+      for (const sec of roundSecs) {
+        const sectionLabel = sec.isAlt ? `★ Alternate Round ${sec.rn}` : `Round ${sec.rn}`;
+        const count = sec.players.length;
+        const det = h('details', { class: `ballot-round-group${sec.isAlt ? ' alt' : ''}` });
+        det.append(h('summary', { class: `ballot-section-h${sec.isAlt ? ' alt' : ''}` },
+          h('span', { class: 'ballot-section-label' }, sectionLabel),
+          h('span', { class: 'ballot-section-meta' }, count ? `${count} locked` : 'no players'),
+        ));
+        if (!count) {
+          det.append(h('div', { class: 'ballot-section-empty' },
+            sec.isAlt ? 'No alternates locked in this round.' : 'No players were locked in this round.'));
+        } else {
           for (const p of sec.players) {
             n += 1;
-            const checked = S.selectedPicks.has(p.id);
-            const tied    = wasTiedLastRound(s, p);
-            grid.append(h('div', {
-              class: `ballot-cell available ${checked ? 'checked' : ''} ${submittedNow ? 'submitted' : ''}`,
-              onclick: () => {
-                if (submittedNow) return;
-                if (S.selectedPicks.has(p.id)) S.selectedPicks.delete(p.id);
-                else {
-                  if (S.selectedPicks.size >= round.picks_per_coach) {
-                    toast(`You can only pick ${round.picks_per_coach}`, 'warn');
-                    return;
-                  }
-                  S.selectedPicks.add(p.id);
-                }
-                saveDraftDebounced(round.id);
-                render();
-              }
-            },
+            det.append(h('div', { class: `ballot-cell locked${sec.isAlt ? ' alt' : ''}` },
               h('span', { class: 'ballot-cell-num' }, `${n}`),
+              sec.isAlt && p.alternate_rank
+                ? h('span', { class: 'ballot-cell-altrank' }, ord(p.alternate_rank))
+                : null,
               h('span', { class: 'ballot-cell-name' }, p.name),
               p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
-              tied    ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
-              checked ? h('span', { class: 'ballot-cell-tag check' }, '✓ Picked') : null,
             ));
           }
         }
+        grid.append(det);
       }
     }
 
@@ -684,7 +686,6 @@
 
     root.append(
       h('div', { class: 'panel' },
-        h('div', { class: 'round-header' }, ...headerBits),
         submittedNow
           ? h('div', { class: 'banner banner-info' }, '✓ Submitted. The screen will update when the admin finalizes the round.')
           : null,
@@ -781,50 +782,52 @@
       return i + (sf[(v-20)%10] || sf[v] || sf[0]);
     };
     let n = 0;
-    for (const sec of sections) {
-      if (sec.type === 'round') {
-        const sectionLabel = sec.isAlt ? `★ Alternate Round ${sec.rn}` : `Round ${sec.rn}`;
-        const count = sec.players.length;
-        const det = h('details', { class: `ballot-round-group${sec.isAlt ? ' alt' : ''}` });
-        det.append(h('summary', { class: `ballot-section-h${sec.isAlt ? ' alt' : ''}` },
-          h('span', { class: 'ballot-section-label' }, sectionLabel),
-          h('span', { class: 'ballot-section-meta' }, count ? `${count} locked` : 'no players'),
+    const availSec = sections.find(sec => sec.type === 'available');
+    const roundSecs = sections.filter(sec => sec.type === 'round');
+
+    if (availSec && availSec.players.length) {
+      grid.append(h('div', { class: 'ballot-section-h available-h' },
+        h('span', { class: 'ballot-section-label' }, 'Available'),
+      ));
+      for (const p of availSec.players) {
+        n += 1;
+        const tied = wasTiedLastRound(s, p);
+        grid.append(h('div', { class: 'ballot-cell available' },
+          h('span', { class: 'ballot-cell-num' }, `${n}`),
+          h('span', { class: 'ballot-cell-name' }, p.name),
+          p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
+          tied ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
         ));
-        if (!count) {
-          det.append(h('div', { class: 'ballot-section-empty' },
-            sec.isAlt ? 'No alternates locked in this round.' : 'No players were locked in this round.'));
-        } else {
-          for (const p of sec.players) {
-            n += 1;
-            const tied = wasTiedLastRound(s, p);
-            det.append(h('div', { class: `ballot-cell locked${sec.isAlt ? ' alt' : ''}` },
-              h('span', { class: 'ballot-cell-num' }, `${n}`),
-              sec.isAlt && p.alternate_rank
-                ? h('span', { class: 'ballot-cell-altrank' }, ord(p.alternate_rank))
-                : null,
-              h('span', { class: 'ballot-cell-name' }, p.name),
-              p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
-              tied ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
-            ));
-          }
-        }
-        grid.append(det);
-      } else { // available
-        if (!sec.players.length) continue;
-        grid.append(h('div', { class: 'ballot-section-h available-h' },
-          h('span', { class: 'ballot-section-label' }, 'Available'),
-        ));
+      }
+    }
+
+    for (const sec of roundSecs) {
+      const sectionLabel = sec.isAlt ? `★ Alternate Round ${sec.rn}` : `Round ${sec.rn}`;
+      const count = sec.players.length;
+      const det = h('details', { class: `ballot-round-group${sec.isAlt ? ' alt' : ''}` });
+      det.append(h('summary', { class: `ballot-section-h${sec.isAlt ? ' alt' : ''}` },
+        h('span', { class: 'ballot-section-label' }, sectionLabel),
+        h('span', { class: 'ballot-section-meta' }, count ? `${count} locked` : 'no players'),
+      ));
+      if (!count) {
+        det.append(h('div', { class: 'ballot-section-empty' },
+          sec.isAlt ? 'No alternates locked in this round.' : 'No players were locked in this round.'));
+      } else {
         for (const p of sec.players) {
           n += 1;
           const tied = wasTiedLastRound(s, p);
-          grid.append(h('div', { class: 'ballot-cell available' },
+          det.append(h('div', { class: `ballot-cell locked${sec.isAlt ? ' alt' : ''}` },
             h('span', { class: 'ballot-cell-num' }, `${n}`),
+            sec.isAlt && p.alternate_rank
+              ? h('span', { class: 'ballot-cell-altrank' }, ord(p.alternate_rank))
+              : null,
             h('span', { class: 'ballot-cell-name' }, p.name),
             p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
             tied ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
           ));
         }
       }
+      grid.append(det);
     }
     return grid;
   }
