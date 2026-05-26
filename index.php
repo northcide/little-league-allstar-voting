@@ -5,7 +5,7 @@ require_once __DIR__ . '/api/security_headers.php';
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#0F1B33">
   <title>Allstar — Anonymous Coach Voting</title>

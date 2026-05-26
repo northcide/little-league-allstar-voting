@@ -124,12 +124,14 @@ p  { margin: 0 0 8px; }
 }
 .topbar-inner {
   height: 100%;
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 22px;
   display: flex;
   align-items: stretch;
   gap: 0;
+  min-width: 0;
 }
 .brand {
   font-family: var(--ff-display);
@@ -1318,8 +1320,11 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
   /* Form-grid stacks */
   .form-grid { grid-template-columns: 1fr; gap: 4px; }
 
-  /* Topbar: drop dividers, hide non-essential bits, allow truncation */
-  .topbar-inner { padding: 0 12px; gap: 8px; }
+  /* Topbar: drop dividers, hide non-essential bits, allow truncation.
+     overflow:hidden is the belt-and-braces guarantee that the topbar
+     can NEVER push beyond the viewport — what triggers iOS auto-zoom. */
+  #topbar { max-width: 100vw; overflow: hidden; }
+  .topbar-inner { padding: 0 12px; gap: 8px; max-width: 100%; overflow: hidden; }
   .brand { border-right: 0; padding-right: 0; margin-right: 8px; font-size: 18px; flex-shrink: 0; }
   #topbar-context { border-left: 0; padding-left: 0; min-width: 0; gap: 6px; font-size: 13px; flex-wrap: nowrap; overflow: hidden; }
   /* League name is redundant with the domain on mobile — hide it (and its trailing separator) */
