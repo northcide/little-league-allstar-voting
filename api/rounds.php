@@ -200,6 +200,17 @@ try {
         $vid = (int)($d['voter_code_id'] ?? 0);
         if (!$rid || !$vid) jsonError('round_id and voter_code_id required');
 
+        // Belt-and-suspenders: ensure the round + voter_code both belong to the
+        // admin's currently selected election. Admin has full access across
+        // elections, but this guards against a stale UI request reaching into
+        // the wrong election by accident.
+        $own = $db->prepare("SELECT 1 FROM rounds WHERE id=? AND election_id=?");
+        $own->execute([$rid, $eid]);
+        if (!$own->fetchColumn()) jsonError('Round does not belong to the selected election', 404);
+        $own = $db->prepare("SELECT 1 FROM voter_codes WHERE id=? AND election_id=?");
+        $own->execute([$vid, $eid]);
+        if (!$own->fetchColumn()) jsonError('Voter does not belong to the selected election', 404);
+
         $db->beginTransaction();
         try {
             // Find the ballot_token via submissions, then delete from both atomically
@@ -247,6 +258,16 @@ try {
                 jsonError("That would lock {$newTotal} players but the roster cap is {$maxRoster}", 409);
             }
 
+            // Defense in depth: every chosen player must belong to this election
+            foreach ($newWinners as $pid) {
+                $own = $db->prepare("SELECT 1 FROM players WHERE id=? AND election_id=?");
+                $own->execute([(int)$pid, $eid]);
+                if (!$own->fetchColumn()) {
+                    $db->rollBack();
+                    jsonError("Player #{$pid} does not belong to this election", 400);
+                }
+            }
+
             // Remove previously locked players from this round
             $db->prepare("DELETE FROM locked_roster WHERE election_id=? AND locked_in_round=?")
                ->execute([$eid, (int)$round['round_num']]);
@@ -272,6 +293,11 @@ try {
         $rn  = (int)($d['round_num'] ?? 0);
         if (!$pid) jsonError('player_id required');
         if (!$rn)  $rn = (int)$db->query("SELECT current_round FROM elections WHERE id={$eid}")->fetchColumn() ?: 1;
+
+        // Defense in depth: don't accept a player from a different election
+        $own = $db->prepare("SELECT 1 FROM players WHERE id=? AND election_id=?");
+        $own->execute([$pid, $eid]);
+        if (!$own->fetchColumn()) jsonError('Player does not belong to the selected election', 404);
 
         // Refuse if at cap (skip check if this player is already locked — it's an idempotent update)
         $isAlreadyLocked = $db->prepare("SELECT 1 FROM locked_roster WHERE election_id=? AND player_id=?");
