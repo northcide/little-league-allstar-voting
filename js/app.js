@@ -715,12 +715,15 @@
   // ── Admin view ─────────────────────────────────────────────────────────────
   function renderAdmin() {
     const s = S.state || {};
-    const root = h('div', { class: 'admin-wrap' });
 
+    // No election selected → full-width welcome card (skip the 220px-sidebar grid)
     if (!s.election) {
-      root.append(renderAdminEmpty());
-      return root;
+      const wrap = h('div', {});
+      wrap.append(renderAdminEmpty());
+      return wrap;
     }
+
+    const root = h('div', { class: 'admin-wrap' });
 
     // Side nav
     const nav = h('aside', { class: 'side-nav' },
