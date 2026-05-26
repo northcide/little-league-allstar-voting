@@ -800,9 +800,9 @@
     const e = s.election;
     const cr = s.current_round;
     const counts = s.counts || {};
-    const rootEl = h('div', {});
-
-    rootEl.append(
+    // Build through h() so null children (e.g. renderLastRoundResults when no
+    // round has finalized yet) are filtered instead of stringified to "null".
+    return h('div', {},
       h('div', { class: 'page-h' },
         h('h2', {},
           e.name,
@@ -873,8 +873,6 @@
         }, true, { showCounts: true }),
       ),
     );
-
-    return rootEl;
   }
 
   function allRoundsFinalized(s) {
