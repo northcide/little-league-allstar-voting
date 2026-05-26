@@ -686,6 +686,7 @@
 
     root.append(
       h('div', { class: 'panel' },
+        h('div', { class: 'round-header' }, ...headerBits),
         submittedNow
           ? h('div', { class: 'banner banner-info' }, '✓ Submitted. The screen will update when the admin finalizes the round.')
           : null,
