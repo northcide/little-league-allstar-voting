@@ -1,10 +1,12 @@
 <?php
 // Allstar — SPA shell. All logic lives in /js/app.js; this file just paints the chrome.
+require_once __DIR__ . '/api/security_headers.php';
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow, noarchive">
   <meta name="theme-color" content="#1e3a5f">
   <title>Allstar — Anonymous Coach Voting</title>
   <link rel="stylesheet" href="css/app.css?v=<?= filemtime(__DIR__ . '/css/app.css') ?>">

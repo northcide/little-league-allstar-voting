@@ -1,9 +1,7 @@
 <?php
 // ── Headers ───────────────────────────────────────────────────────────────────
+require_once __DIR__ . '/security_headers.php';
 header('Content-Type: application/json');
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: SAMEORIGIN');
-header('X-XSS-Protection: 1; mode=block');
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 
