@@ -16,6 +16,7 @@
     confirmDialog: null,
     view: 'login',
     adminSubview: 'dashboard',  // dashboard | setup | codes | results | overrides | audit
+    roundOverride: new Map(),   // round_num → bool (true=expanded, false=collapsed). Absent → default
   };
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
@@ -800,8 +801,7 @@
     const e = s.election;
     const cr = s.current_round;
     const counts = s.counts || {};
-    // Build through h() so null children (e.g. renderLastRoundResults when no
-    // round has finalized yet) are filtered instead of stringified to "null".
+    // Build through h() so null children are filtered instead of stringified to "null".
     return h('div', {},
       h('div', { class: 'page-h' },
         h('h2', {},
@@ -844,17 +844,11 @@
         counterCard('Roster', `${counts.roster_locked ?? 0} / ${counts.roster_max ?? 0}`, 'locked in', (counts.roster_locked >= counts.roster_max) ? 'done' : 'pending'),
       ),
 
-      // Current round block
-      cr ? h('div', { class: 'panel current-round' },
-        h('div', { class: 'panel-h' },
-          h('h3', {}, `Round ${cr.round_num}`),
-          h('span', { class: `pill pill-${cr.state}` }, cr.state.replace('_', ' ')),
-          h('span', { class: 'micro' }, `Pick ${cr.picks_per_coach}, lock ${cr.picks_to_lock}`),
-        ),
-      ) : h('div', { class: 'panel' }, h('div', { class: 'muted' }, 'No round yet — start the next round to open voting.')),
-
-      // Last finalized round results (admin sees full vote counts here)
-      renderLastRoundResults(s),
+      // Rounds — every round shown as a collapsible card, newest first.
+      // Defaults: current/active rounds expanded; finalized rounds collapsed.
+      ((s.rounds || []).length === 0)
+        ? h('div', { class: 'panel' }, h('div', { class: 'muted' }, 'No round yet — start the next round to open voting.'))
+        : h('div', {}, ...(s.rounds || []).slice().reverse().map(r => renderRoundCard(s, r))),
 
       // Codes status compact
       h('div', { class: 'panel' },
@@ -901,17 +895,16 @@
     }
   }
 
-  // Admin-only panel: per-player vote tally for the most recently finalized round.
-  // Returns null when no round has finalized yet. Uses s.round_tallies (already in
-  // the state payload) so no extra API call.
-  function renderLastRoundResults(s) {
-    const tallies = s.round_tallies || {};
-    const nums = Object.keys(tallies).map(Number);
-    if (!nums.length) return null;
-    const lastRn = Math.max(...nums);
-    const tally  = tallies[lastRn] || {};
-    const round  = (s.rounds || []).find(r => r.round_num === lastRn);
-    if (!round) return null;
+  // One collapsible card per round on the admin dashboard. Click the header
+  // row to toggle. Default: current/active/pending rounds expanded;
+  // finalized rounds collapsed (user clicks override the default).
+  function renderRoundCard(s, round) {
+    const rn = round.round_num;
+    const defaultOpen = round.state !== 'finalized';
+    const isOpen = S.roundOverride.has(rn) ? S.roundOverride.get(rn) : defaultOpen;
+    const tally  = (s.round_tallies && s.round_tallies[rn]) || {};
+    const tiedSet   = new Set((s.round_tied_ids && s.round_tied_ids[rn]) || []);
+    const lockedSet = new Set((s.locked || []).filter(l => l.locked_in_round === rn).map(l => l.player_id));
     const players = s.players || [];
 
     const sortedIds = Object.keys(tally).map(Number).sort((a, b) => {
@@ -920,18 +913,26 @@
       return a - b;
     });
 
-    const lockedSet = new Set((s.locked || []).filter(l => l.locked_in_round === lastRn).map(l => l.player_id));
-    const tiedSet   = new Set((s.round_tied_ids && s.round_tied_ids[lastRn]) || []);
+    const header = h('div', {
+      class: 'round-card-h',
+      onclick: () => { S.roundOverride.set(rn, !isOpen); render(); },
+    },
+      h('span', { class: 'round-card-chevron' }, isOpen ? '▾' : '▸'),
+      h('h3', {}, `Round ${rn}`),
+      h('span', { class: `pill pill-${round.state}` }, round.state.replace('_', ' ')),
+      h('span', { class: 'micro' }, `Pick ${round.picks_per_coach}, lock ${round.picks_to_lock}`),
+      round.has_tie_at_cutoff ? h('span', { class: 'pill pill-warn' }, '⚠ tie at cutoff') : null,
+    );
 
-    return h('div', { class: 'panel' },
-      h('div', { class: 'panel-h' },
-        h('h3', {}, `Round ${lastRn} results`),
-        h('span', { class: 'micro' }, `Pick ${round.picks_per_coach}, lock ${round.picks_to_lock}`),
-        round.has_tie_at_cutoff ? h('span', { class: 'pill pill-warn' }, '⚠ tie at cutoff') : null,
-      ),
-      sortedIds.length === 0
-        ? h('div', { class: 'muted' }, 'No ballots were submitted.')
-        : h('table', { class: 'tbl tally' },
+    let body = null;
+    if (isOpen) {
+      if (round.state === 'pending') {
+        body = h('div', { class: 'round-card-body muted' }, 'This round has not started yet.');
+      } else if (sortedIds.length === 0) {
+        body = h('div', { class: 'round-card-body muted' }, 'No ballots have been tallied yet.');
+      } else {
+        body = h('div', { class: 'round-card-body' },
+          h('table', { class: 'tbl tally' },
             h('thead', {}, h('tr', {},
               h('th', {}, 'Player'),
               h('th', {}, 'Jersey'),
@@ -955,13 +956,17 @@
                 h('td', { class: 'tally-action' },
                   isTied ? h('button', {
                     class: 'btn btn-sm btn-primary',
-                    onclick: () => lockTiedPlayer(p, lastRn),
-                  }, `Lock in for Round ${lastRn}`) : null,
+                    onclick: (ev) => { ev.stopPropagation(); lockTiedPlayer(p, rn); },
+                  }, `Lock in for Round ${rn}`) : null,
                 ),
               );
             }))
           ),
-    );
+        );
+      }
+    }
+
+    return h('div', { class: `panel round-card ${isOpen ? 'open' : 'closed'}` }, header, body);
   }
 
   function lockTiedPlayer(p, roundNum) {
