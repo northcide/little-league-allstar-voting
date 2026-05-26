@@ -1308,10 +1308,27 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
   /* Form-grid stacks */
   .form-grid { grid-template-columns: 1fr; gap: 4px; }
 
-  /* Hide topbar dividers (gap-only) */
-  #topbar-context { border-left: 0; padding-left: 0; }
-  #topbar-actions { border-left: 0; padding-left: 0; }
-  .brand { border-right: 0; padding-right: 0; margin-right: 12px; font-size: 20px; }
+  /* Topbar: drop dividers, hide non-essential bits, allow truncation */
+  .topbar-inner { padding: 0 12px; gap: 8px; }
+  .brand { border-right: 0; padding-right: 0; margin-right: 8px; font-size: 18px; flex-shrink: 0; }
+  #topbar-context { border-left: 0; padding-left: 0; min-width: 0; gap: 6px; font-size: 13px; flex-wrap: nowrap; overflow: hidden; }
+  /* League name is redundant with the domain on mobile — hide it (and its trailing separator) */
+  #topbar-context .league { display: none; }
+  #topbar-context .league + .sep { display: none; }
+  /* Election name truncates instead of wrapping */
+  #topbar-context .elec {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1;
+  }
+  #topbar-actions { border-left: 0; padding-left: 0; gap: 6px; flex-shrink: 0; }
+  #topbar-actions .btn { padding: 6px 10px; font-size: 11px; }
+  #topbar-actions .badge { font-size: 11px; padding: 3px 8px; }
+
+  /* Round header: allow wrap, smaller round number, kill the "X locked in"
+     micro on small widths so the pill row stays compact */
+  .round-header { flex-wrap: wrap; row-gap: 6px; padding: 12px 14px; }
+  .round-header .round-num { font-size: 18px; line-height: 1.1; }
+  .round-header .sep { display: none; }
+  .round-header .micro { width: 100%; font-size: 12px; }
 }
 
 /* ── Very small (≤420px) ─────────────────────────────────────────────────── */
@@ -1321,6 +1338,11 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
   .brand { font-size: 0; }
   .brand .brand-icon { font-size: 22px; }
   .brand-icon { margin: 0; }
-  .topbar-inner { padding: 0 12px; }
-  #topbar-actions .btn { padding: 6px 10px; font-size: 11px; }
+  .topbar-inner { padding: 0 10px; gap: 6px; }
+  #topbar-actions .btn { padding: 5px 9px; font-size: 11px; }
+  /* The status pill (active/setup/etc.) is on the dashboard already — drop it from the topbar at narrow widths */
+  #topbar-context .pill { display: none; }
+  /* And the rank-header micro line stays on its own row, smaller */
+  .round-header .round-num { font-size: 16px; }
+  .round-header .micro { font-size: 11px; }
 }
