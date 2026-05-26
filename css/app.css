@@ -79,7 +79,16 @@
 
 /* ── Reset + base ────────────────────────────────────────────────────────── */
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; }
+html {
+  -webkit-text-size-adjust: 100%;   /* iOS Safari: don't auto-scale text */
+  text-size-adjust: 100%;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow-x: clip;                 /* belt-and-braces against any element pushing layout beyond viewport */
+}
+body { width: 100%; }
 body {
   font-family: var(--ff-serif);
   font-size: 15px;
@@ -484,6 +493,7 @@ p  { margin: 0 0 8px; }
   display: flex; align-items: center; gap: 14px;
   position: relative;
   user-select: none;
+  min-width: 0;
 }
 .ballot-cell:last-child { border-bottom: 0; }
 .ballot-cell:hover:not(.locked):not(.submitted) { background: var(--paper-3); }
@@ -517,7 +527,7 @@ p  { margin: 0 0 8px; }
   flex-shrink: 0;
 }
 .ballot-cell.checked .ballot-cell-num, .ballot-cell.ranked .ballot-cell-num { color: var(--red); }
-.ballot-cell-name { font-family: var(--ff-serif); font-weight: 700; font-size: 16px; color: var(--ink); }
+.ballot-cell-name { font-family: var(--ff-serif); font-weight: 700; font-size: 16px; color: var(--ink); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .ballot-cell-jersey { font-family: var(--ff-serif); font-style: italic; font-size: 13px; color: var(--ink-3); margin-left: 2px; }
 .ballot-cell-tag, .ballot-cell-tag.check {
   margin-left: auto;
@@ -678,7 +688,7 @@ p  { margin: 0 0 8px; }
 .chip-winner { background: var(--green-bg); border-color: var(--green); color: var(--ink); }
 .chip-tied   { background: var(--amber);    border-color: var(--amber-d); color: var(--ink); }
 .chip-alt    { background: var(--gold);     border-color: var(--gold-d);  color: var(--ink); }
-.chip-name   { font-weight: 700; }
+.chip-name   { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
 .chip-jersey { font-size: 12px; font-style: italic; color: var(--ink-3); }
 .chip-count {
   font-family: var(--ff-display);
