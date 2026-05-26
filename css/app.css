@@ -456,6 +456,22 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 /* Alternate-round identifier pill on round cards */
 .pill-alt { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-weight: 800; }
 
+/* Alternate-round section header in the roster list */
+.ballot-section-h.alt {
+  color: #92400e;
+  border-bottom-color: #fcd34d;
+}
+
+/* Alternate-round locked ballot cell + inline rank badge */
+.ballot-cell.locked.alt { background: #fef3c7; border-color: #fcd34d; }
+.ballot-cell-altrank {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: #92400e; color: #fff;
+  padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: .3px;
+  margin-right: 2px;
+}
+
 /* Alternate roster section + chip */
 .roster-section.alt-section { margin-top: 14px; border-top: 1px dashed var(--border-light); padding-top: 12px; }
 .chip-alt { background: #fef3c7; border-color: #fcd34d; color: #78350f; }

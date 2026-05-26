@@ -454,6 +454,22 @@
     if (round.state === 'finalized') {
       const winnersIds = new Set((round.winners || []).map(Number));
       const tieIds     = new Set((round.tie_player_ids || []).map(Number));
+      // For alternate rounds, look up each winner's alternate_rank to render in order with rank prefix
+      const altRankByPid = new Map();
+      for (const l of (s.locked || [])) {
+        if (l.locked_in_round === round.round_num && l.alternate_rank != null) {
+          altRankByPid.set(l.player_id, l.alternate_rank);
+        }
+      }
+      const winners = players.filter(p => winnersIds.has(p.id));
+      if (isAlternateRound) {
+        winners.sort((a, b) => (altRankByPid.get(a.id) || 999) - (altRankByPid.get(b.id) || 999));
+      }
+      const ord = (i) => {
+        const sf = ['th','st','nd','rd'], v = i % 100;
+        return i + (sf[(v-20)%10] || sf[v] || sf[0]);
+      };
+
       const result = h('div', { class: 'results-card' },
         h('h2', {}, `${roundLabel} Results`),
         round.has_tie_at_cutoff
@@ -463,7 +479,17 @@
           : null,
         h('h3', {}, isAlternateRound ? 'Locked as alternates' : 'Locked in this round'),
         h('div', { class: 'winners-list' },
-          ...players.filter(p => winnersIds.has(p.id)).map(p => playerChip(p, 'winner')),
+          ...winners.map(p => {
+            if (isAlternateRound) {
+              const rank = altRankByPid.get(p.id);
+              return h('div', { class: 'chip chip-winner chip-alt' },
+                rank ? h('span', { class: 'chip-alt-rank' }, `${ord(rank)} alt`) : null,
+                h('span', { class: 'chip-name' }, p.name),
+                p.jersey ? h('span', { class: 'chip-jersey' }, `#${p.jersey}`) : null,
+              );
+            }
+            return playerChip(p, 'winner');
+          }),
           winnersIds.size === 0 ? h('div', { class: 'muted' }, isAlternateRound ? 'No alternates locked.' : 'No new players locked.') : null,
         ),
         tieIds.size ? h('div', { class: 'tied-block' },
@@ -553,18 +579,27 @@
     } else {
       // Regular round: existing sectioned roster grid
       const sections = rosterSections(s);
+      const ord = (i) => {
+        const sf = ['th','st','nd','rd'], v = i % 100;
+        return i + (sf[(v-20)%10] || sf[v] || sf[0]);
+      };
       let n = 0;
       for (const sec of sections) {
         if (sec.type === 'round') {
-          grid.append(h('div', { class: 'ballot-section-h' }, `Round ${sec.rn}`));
+          const sectionLabel = sec.isAlt ? `★ Alternate Round ${sec.rn}` : `Round ${sec.rn}`;
+          grid.append(h('div', { class: `ballot-section-h${sec.isAlt ? ' alt' : ''}` }, sectionLabel));
           if (!sec.players.length) {
-            grid.append(h('div', { class: 'ballot-section-empty' }, 'No players were locked in this round.'));
+            grid.append(h('div', { class: 'ballot-section-empty' },
+              sec.isAlt ? 'No alternates locked in this round.' : 'No players were locked in this round.'));
             continue;
           }
           for (const p of sec.players) {
             n += 1;
-            grid.append(h('div', { class: 'ballot-cell locked' },
+            grid.append(h('div', { class: `ballot-cell locked${sec.isAlt ? ' alt' : ''}` },
               h('span', { class: 'ballot-cell-num' }, `${n}`),
+              sec.isAlt && p.alternate_rank
+                ? h('span', { class: 'ballot-cell-altrank' }, ord(p.alternate_rank))
+                : null,
               h('span', { class: 'ballot-cell-name' }, p.name),
               p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
             ));
@@ -700,19 +735,28 @@
   // coach can see that a tied/skipped round happened.
   function rosterSections(s) {
     const players = s.players || [];
-    const lockedByRn = {};
+    const lockedRowsByRn = {};
+    const altRoundNums = new Set();
     for (const l of (s.locked || [])) {
       const rn = Number(l.locked_in_round);
-      (lockedByRn[rn] ||= []).push(l.player_id);
+      (lockedRowsByRn[rn] ||= []).push(l);
+      if (l.alternate_rank != null) altRoundNums.add(rn);
     }
     const finalizedNums = Object.keys(s.round_tallies || {}).map(Number);
-    const lockedNums    = Object.keys(lockedByRn).map(Number);
+    const lockedNums    = Object.keys(lockedRowsByRn).map(Number);
     const allRoundNums  = Array.from(new Set([...finalizedNums, ...lockedNums])).sort((a, b) => a - b);
     const sections = [];
     for (const rn of allRoundNums) {
-      const ids = lockedByRn[rn] || [];
-      const ps  = ids.map(id => players.find(p => p.id === id)).filter(Boolean);
-      sections.push({ type: 'round', rn, players: ps });
+      const rows = (lockedRowsByRn[rn] || []).slice();
+      const isAlt = altRoundNums.has(rn);
+      if (isAlt) rows.sort((a, b) => (a.alternate_rank || 0) - (b.alternate_rank || 0));
+      const ps = rows
+        .map(r => {
+          const p = players.find(pl => pl.id === r.player_id);
+          return p ? { ...p, alternate_rank: r.alternate_rank } : null;
+        })
+        .filter(Boolean);
+      sections.push({ type: 'round', rn, isAlt, players: ps });
     }
     const lockedSet = new Set((s.locked || []).map(l => l.player_id));
     const available = players.filter(p => !lockedSet.has(p.id));
@@ -724,19 +768,28 @@
   function renderReadonlyRoster(s) {
     const grid = h('div', { class: 'ballot-grid readonly' });
     const sections = rosterSections(s);
+    const ord = (i) => {
+      const sf = ['th','st','nd','rd'], v = i % 100;
+      return i + (sf[(v-20)%10] || sf[v] || sf[0]);
+    };
     let n = 0;
     for (const sec of sections) {
       if (sec.type === 'round') {
-        grid.append(h('div', { class: 'ballot-section-h' }, `Round ${sec.rn}`));
+        const sectionLabel = sec.isAlt ? `★ Alternate Round ${sec.rn}` : `Round ${sec.rn}`;
+        grid.append(h('div', { class: `ballot-section-h${sec.isAlt ? ' alt' : ''}` }, sectionLabel));
         if (!sec.players.length) {
-          grid.append(h('div', { class: 'ballot-section-empty' }, 'No players were locked in this round.'));
+          grid.append(h('div', { class: 'ballot-section-empty' },
+            sec.isAlt ? 'No alternates locked in this round.' : 'No players were locked in this round.'));
           continue;
         }
         for (const p of sec.players) {
           n += 1;
           const tied = wasTiedLastRound(s, p);
-          grid.append(h('div', { class: 'ballot-cell locked' },
+          grid.append(h('div', { class: `ballot-cell locked${sec.isAlt ? ' alt' : ''}` },
             h('span', { class: 'ballot-cell-num' }, `${n}`),
+            sec.isAlt && p.alternate_rank
+              ? h('span', { class: 'ballot-cell-altrank' }, ord(p.alternate_rank))
+              : null,
             h('span', { class: 'ballot-cell-name' }, p.name),
             p.jersey ? h('span', { class: 'ballot-cell-jersey' }, `#${p.jersey}`) : null,
             tied ? h('span', { class: 'ballot-cell-tied' }, '⚖ TIED') : null,
