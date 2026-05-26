@@ -755,21 +755,23 @@
   }
 
   function renderAdminEmpty() {
-    const card = h('div', { class: 'empty-card' },
-      h('h2', {}, 'Welcome, admin'),
-    );
-    const listWrap = h('div', { class: 'admin-elist' }, h('div', { class: 'muted' }, 'Loading elections…'));
-    card.append(listWrap);
-    card.append(h('button', { class: 'btn btn-primary btn-lg', onclick: openCreateElection }, '+ Create New Election'));
+    const wrap = h('div', { class: 'admin-home' });
+    wrap.append(h('div', { class: 'page-h' },
+      h('h2', {}, 'Elections'),
+      h('div', { class: 'page-actions' },
+        h('button', { class: 'btn btn-primary', onclick: openCreateElection }, '+ Create New Election'),
+      ),
+    ));
+    const listWrap = h('div', { class: 'admin-elist' }, h('div', { class: 'muted' }, 'Loading…'));
+    wrap.append(listWrap);
 
     api('elections', 'list').then(d => {
       clear(listWrap);
       const els = (d.elections || []).filter(e => e.status !== 'archived');
       if (!els.length) {
-        listWrap.append(h('p', {}, 'No elections yet. Create one to get started:'));
+        listWrap.append(h('div', { class: 'muted' }, 'No elections yet. Click "+ Create New Election" above to get started.'));
         return;
       }
-      listWrap.append(h('div', { class: 'admin-elist-label' }, 'Open an election:'));
       for (const e of els) {
         listWrap.append(h('button', {
           class: 'admin-elist-row',
@@ -790,7 +792,7 @@
       listWrap.append(h('div', { class: 'banner banner-error' }, err.message));
     });
 
-    return h('div', { class: 'admin-empty' }, card);
+    return wrap;
   }
 
   function renderAdminDashboard() {
