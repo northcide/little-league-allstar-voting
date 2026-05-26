@@ -130,8 +130,8 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 /* ── Login ────────────────────────────────────────────────────────────────── */
 .login-wrap { display: flex; justify-content: center; align-items: flex-start; padding: 50px 20px; }
 .login-card {
-  background: var(--bg2); border-radius: 12px; padding: 32px;
-  width: 100%; max-width: 420px;
+  background: var(--bg2); border-radius: 12px; padding: 32px 36px;
+  width: 100%; max-width: 560px;
   box-shadow: var(--shadow-lg);
 }
 .login-card h2 { font-size: 22px; font-weight: 800; color: var(--topbar-bg); margin-bottom: 2px; }
@@ -321,11 +321,11 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .nav-item:hover { background: var(--bg3); }
 .nav-item.active { background: var(--accent); color: #fff; }
 .admin-content { min-width: 0; }
-.admin-empty { display: flex; justify-content: center; padding: 80px 20px; }
-.empty-card { text-align: center; background: var(--bg2); padding: 40px; border-radius: var(--radius); max-width: 480px; box-shadow: var(--shadow); }
-.empty-card h2 { font-size: 22px; margin-bottom: 8px; }
-.empty-card p  { color: var(--text2); margin-bottom: 18px; }
-.empty-card .btn-lg { margin-bottom: 14px; }
+.admin-empty { display: flex; justify-content: center; padding: 60px 20px; }
+.empty-card { background: var(--bg2); padding: 36px 44px; border-radius: var(--radius); width: 100%; max-width: 760px; box-shadow: var(--shadow); }
+.empty-card h2 { font-size: 26px; margin-bottom: 8px; text-align: center; }
+.empty-card > p  { color: var(--text2); margin-bottom: 18px; text-align: center; }
+.empty-card .btn-lg { display: block; margin: 18px auto 0; }
 
 /* Counters */
 .counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 16px; }
@@ -454,16 +454,23 @@ textarea:focus { outline: none; border-color: var(--accent); }
 }
 
 /* Public election picker on the coach login screen */
-.election-picker { margin: 12px 0 4px; display: flex; flex-direction: column; gap: 8px; }
+.election-picker {
+  margin: 12px 0 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.election-picker .election-picker-label { grid-column: 1 / -1; }
 .election-picker-label {
   font-size: 11px; font-weight: 700; color: var(--text3);
   text-transform: uppercase; letter-spacing: .5px;
 }
 .election-pick-btn {
-  justify-content: flex-start;
-  text-align: left;
+  justify-content: center;
+  text-align: center;
   font-weight: 700;
-  padding: 10px 14px;
+  font-size: 15px;
+  padding: 14px 16px;
 }
 .login-divider {
   text-align: center; font-size: 11px; font-weight: 700; color: var(--text3);
@@ -479,25 +486,31 @@ textarea:focus { outline: none; border-color: var(--accent); }
 .login-divider::after  { right: 0; }
 
 /* Admin empty-state election list */
-.admin-elist { display: flex; flex-direction: column; gap: 6px; margin: 16px 0 20px; }
+.admin-elist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 10px;
+  margin: 18px 0 22px;
+}
 .admin-elist-label {
+  grid-column: 1 / -1;
   font-size: 11px; font-weight: 700; color: var(--text3);
-  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px;
 }
 .admin-elist-row {
   text-align: left;
-  background: var(--bg2);
+  background: var(--bg);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
+  padding: 14px 16px;
   cursor: pointer;
-  transition: background .12s, border-color .12s;
+  transition: background .12s, border-color .12s, transform .12s;
   font: inherit;
   color: inherit;
 }
-.admin-elist-row:hover { background: var(--bg3); border-color: var(--accent); }
-.admin-elist-name { font-weight: 700; font-size: 15px; }
-.admin-elist-meta { font-size: 12px; color: var(--text3); margin-top: 2px; }
+.admin-elist-row:hover { background: var(--bg3); border-color: var(--accent); transform: translateY(-1px); }
+.admin-elist-name { font-weight: 700; font-size: 16px; }
+.admin-elist-meta { font-size: 12px; color: var(--text3); margin-top: 4px; }
 
 /* Rounds edit */
 .rounds-edit { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; }
