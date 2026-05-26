@@ -54,14 +54,14 @@ try {
         $d         = getInput();
         $name      = trim($d['name'] ?? '');
         $voteCode  = strtolower(trim($d['vote_code'] ?? ''));
-        $expected  = (int)($d['expected_voters'] ?? 0);
         $maxRoster = (int)($d['max_roster_size'] ?? 12);
+        $coachPw   = (string)($d['coach_password'] ?? '');
 
         if ($name === '')                 jsonError('Name is required');
         if (!preg_match('/^[a-z0-9_-]{3,64}$/', $voteCode))
                                           jsonError('Vote code must be 3–64 chars (letters, digits, dash, underscore)');
-        if ($expected < 1 || $expected > 1000) jsonError('Expected voters must be 1–1000');
         if ($maxRoster < 1 || $maxRoster > 100) jsonError('Max roster size must be 1–100');
+        if (strlen($coachPw) < 4)         jsonError('Coach password must be at least 4 characters');
 
         // Uniqueness
         $exists = $db->prepare("SELECT id FROM elections WHERE LOWER(vote_code)=?");
@@ -70,8 +70,8 @@ try {
 
         $db->beginTransaction();
         try {
-            $ins = $db->prepare("INSERT INTO elections (name, vote_code, status, expected_voters, max_roster_size) VALUES (?,?,?,?,?)");
-            $ins->execute([$name, $voteCode, 'setup', $expected, $maxRoster]);
+            $ins = $db->prepare("INSERT INTO elections (name, vote_code, status, expected_voters, max_roster_size, coach_password) VALUES (?,?,?,0,?,?)");
+            $ins->execute([$name, $voteCode, 'setup', $maxRoster, password_hash($coachPw, PASSWORD_DEFAULT)]);
             $eid = (int)$db->lastInsertId();
 
             // Players, if provided
@@ -107,7 +107,11 @@ try {
         $sets = [];
         $args = [];
         if (isset($d['name']))            { $sets[] = 'name=?';            $args[] = trim($d['name']); }
-        if (isset($d['expected_voters'])) { $sets[] = 'expected_voters=?'; $args[] = (int)$d['expected_voters']; }
+        if (!empty($d['coach_password'])) {
+            $pw = (string)$d['coach_password'];
+            if (strlen($pw) < 4) jsonError('Coach password must be at least 4 characters');
+            $sets[] = 'coach_password=?'; $args[] = password_hash($pw, PASSWORD_DEFAULT);
+        }
         if (isset($d['max_roster_size'])) {
             $m = (int)$d['max_roster_size'];
             if ($m < 1 || $m > 100) jsonError('Max roster size must be 1–100');
@@ -129,11 +133,11 @@ try {
         $e = $stmt->fetch();
         if (!$e) jsonError('Not found', 404);
 
-        // Pre-flight: ≥2 active players (need at least 2 to vote between) and ≥ expected_voters codes
+        // Pre-flight: ≥2 active players. Coaches sign in dynamically via shared
+        // password so there's no pre-generation requirement.
         $playerCount = (int)$db->query("SELECT COUNT(*) FROM players WHERE election_id={$id} AND active=1")->fetchColumn();
-        $codeCount   = (int)$db->query("SELECT COUNT(*) FROM voter_codes WHERE election_id={$id} AND revoked=0")->fetchColumn();
         if ($playerCount < 2) jsonError("Need at least 2 active players to activate the election");
-        if ($codeCount   < (int)$e['expected_voters']) jsonError("Generate at least {$e['expected_voters']} voter codes before activating");
+        if (empty($e['coach_password'])) jsonError("Set a coach password before activating");
 
         $db->prepare("UPDATE elections SET status='active' WHERE id=?")->execute([$id]);
         audit($db, $id, 'admin', 'activate_election', []);

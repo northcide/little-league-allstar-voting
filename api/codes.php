@@ -51,28 +51,6 @@ try {
         jsonResponse(['codes' => $rows, 'round_id' => $rid]);
     }
 
-    if ($action === 'generate') {
-        // Sequential numeric codes. Picks up after the highest existing numeric
-        // code for the election, so a second generate run continues the count.
-        $d = getInput();
-        $n = (int)($d['n'] ?? 0);
-        if ($n < 1 || $n > 500) jsonError('n must be 1–500');
-
-        $maxStmt = $db->prepare("SELECT COALESCE(MAX(CAST(word AS UNSIGNED)), 0) FROM voter_codes WHERE election_id=?");
-        $maxStmt->execute([$eid]);
-        $start = (int)$maxStmt->fetchColumn() + 1;
-
-        $ins = $db->prepare("INSERT INTO voter_codes (election_id, word) VALUES (?,?)");
-        $added = [];
-        for ($i = 0; $i < $n; $i++) {
-            $num = (string)($start + $i);
-            $ins->execute([$eid, $num]);
-            $added[] = $num;
-        }
-        audit($db, $eid, 'admin', 'codes_generate', ['n' => $n, 'range' => $start . '-' . ($start + $n - 1)]);
-        jsonResponse(['added' => $added]);
-    }
-
     if ($action === 'revoke') {
         $d   = getInput();
         $id  = (int)($d['voter_code_id'] ?? 0);
@@ -91,14 +69,6 @@ try {
            ->execute([$id, $eid]);
         audit($db, $eid, 'admin', 'code_unrevoke', ['voter_code_id' => $id]);
         jsonResponse(['ok' => true]);
-    }
-
-    if ($action === 'clear_unclaimed') {
-        // Remove unclaimed codes (useful if admin generated too many)
-        $stmt = $db->prepare("DELETE FROM voter_codes WHERE election_id=? AND session_token IS NULL AND revoked=0");
-        $stmt->execute([$eid]);
-        audit($db, $eid, 'admin', 'codes_clear_unclaimed', ['removed' => $stmt->rowCount()]);
-        jsonResponse(['removed' => $stmt->rowCount()]);
     }
 
     jsonError('Unknown action', 400);

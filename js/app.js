@@ -159,9 +159,9 @@
     S.csrf = r.csrf_token; S.role = 'admin';
     await startPolling();
   }
-  async function coachLogin(vote_code, word) {
+  async function coachLogin(vote_code, password) {
     if (!S.csrf) { const r = await api('auth', 'check'); S.csrf = r.csrf_token; S.leagueName = r.league_name; }
-    const r = await api('auth', 'coach_login', { vote_code, word });
+    const r = await api('auth', 'coach_login', { vote_code, password });
     S.csrf = r.csrf_token; S.role = 'coach';
     await startPolling();
   }
@@ -306,29 +306,29 @@
         const params = new URLSearchParams(window.location.search);
         const presetCode = (params.get('e') || '').trim().toLowerCase();
 
-        const word = h('input', { type: 'text', inputmode: 'numeric', class: 'coach-id-input', placeholder: '#', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
-        const btn  = h('button', { class: 'btn btn-primary btn-block' }, 'Enter Vote');
+        const pw  = h('input', { type: 'password', placeholder: 'shared coach password', autocomplete: 'off' });
+        const btn = h('button', { class: 'btn btn-primary btn-block' }, 'Enter Vote');
 
         if (presetCode) {
           btn.onclick = async () => {
-            try { err.classList.add('hidden'); await coachLogin(presetCode, word.value.trim()); }
+            try { err.classList.add('hidden'); await coachLogin(presetCode, pw.value); }
             catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
           };
-          word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+          pw.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
           body.append(
-            h('p', { class: 'sub' }, 'Enter your Coach ID.'),
+            h('p', { class: 'sub' }, 'Enter the password for this election.'),
             err,
             h('div', { class: 'preset-code' },
               h('span', { class: 'preset-code-label' }, 'Election:'),
               h('span', { class: 'preset-code-value' }, presetCode),
               h('a', { href: '?', class: 'preset-code-change' }, '(change)'),
             ),
-            h('label', {}, 'Coach ID'), word,
+            h('label', {}, 'Password'), pw,
             btn,
           );
-          setTimeout(() => word.focus(), 50);
+          setTimeout(() => pw.focus(), 50);
         } else {
-          // Fetch active elections to offer as quick-pick. No auth required.
+          // Fetch active elections and let the user pick one — no auth required.
           const listWrap = h('div', { class: 'election-picker' }, h('div', { class: 'muted' }, 'Loading elections…'));
           api('elections', 'public_list').then(d => {
             clear(listWrap);
@@ -344,22 +344,12 @@
                 onclick: () => { window.location.search = '?e=' + encodeURIComponent(e.vote_code); },
               }, e.name));
             }
-          }).catch(() => { clear(listWrap); /* silent fail — manual entry still works */ });
+          }).catch(() => { clear(listWrap); });
 
-          const code = h('input', { type: 'text', placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
-          btn.onclick = async () => {
-            try { err.classList.add('hidden'); await coachLogin(code.value.trim(), word.value.trim()); }
-            catch (e) { err.textContent = e.message; err.classList.remove('hidden'); }
-          };
-          word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
           body.append(
-            h('p', { class: 'sub' }, 'Pick your election below, or enter the codes manually.'),
+            h('p', { class: 'sub' }, 'Pick your election to continue.'),
             err,
             listWrap,
-            h('div', { class: 'login-divider' }, 'or enter manually'),
-            h('label', {}, 'Election Code'), code,
-            h('label', {}, 'Coach ID'), word,
-            btn,
           );
         }
       } else {
@@ -731,7 +721,7 @@
     // Side nav
     const nav = h('aside', { class: 'side-nav' },
       navItem('dashboard', '📊 Dashboard'),
-      navItem('codes',     '🎟 Voter Codes'),
+      navItem('codes',     '🎟 Signed In'),
       navItem('setup',     '⚙ Setup (players / rounds)'),
       navItem('results',   '🏆 Results'),
       navItem('overrides', '🛠 Overrides'),
@@ -840,7 +830,7 @@
               return h('button', {
                 class: `btn ${cr.state === 'all_submitted' ? 'btn-success' : 'btn-warning'}`,
                 onclick: () => finalizeRound(cr, cr.state !== 'all_submitted'),
-              }, cr.state === 'all_submitted' ? `✓ Finalize Round ${cr.round_num}` : `⚠ Force-Finalize Round ${cr.round_num} (only ${counts.submitted}/${counts.expected})`);
+              }, cr.state === 'all_submitted' ? `✓ Finalize Round ${cr.round_num}` : `⚠ Force-Finalize Round ${cr.round_num} (only ${counts.submitted}/${counts.signed_in})`);
             }
             // No active round (either no rounds yet or latest is finalized) → Start Next + Finalize All
             return null;
@@ -853,10 +843,9 @@
 
       // Counter cards
       h('div', { class: 'counters' },
-        counterCard('Expected', counts.expected, 'voters configured'),
-        counterCard('Codes', counts.total_codes, 'generated', counts.total_codes < counts.expected ? 'warn' : null),
+        counterCard('Signed in', counts.signed_in, 'coaches so far'),
         counterCard('Logged in', counts.logged_in, 'in last 30s', 'live'),
-        counterCard('Submitted', counts.submitted, `of ${counts.expected} this round`, cr && counts.submitted >= counts.expected ? 'ready' : null),
+        counterCard('Submitted', counts.submitted, counts.signed_in > 0 ? `of ${counts.signed_in} this round` : 'this round', cr && counts.signed_in > 0 && counts.submitted >= counts.signed_in ? 'ready' : null),
         counterCard('Outstanding', counts.outstanding, 'not yet voted', counts.outstanding > 0 ? 'pending' : 'done'),
         counterCard('Roster', `${counts.roster_locked ?? 0} / ${counts.roster_max ?? 0}`, 'locked in', (counts.roster_locked >= counts.roster_max) ? 'done' : 'pending'),
       ),
@@ -870,7 +859,7 @@
 
       // Codes status compact
       h('div', { class: 'panel' },
-        h('div', { class: 'panel-h' }, h('h3', {}, 'Voter codes')),
+        h('div', { class: 'panel-h' }, h('h3', {}, 'Signed in')),
         renderCodesGrid(s.codes || []),
       ),
 
@@ -1015,9 +1004,7 @@
 
   function renderCodesGrid(codes) {
     if (!codes.length) return h('div', { class: 'muted' },
-      'No codes yet. Go to ',
-      h('a', { href: '#', onclick: e => { e.preventDefault(); S.adminSubview = 'codes'; render(); } }, 'Voter Codes'),
-      ' to generate.'
+      'No coaches have signed in yet. Share the election URL and password with your coaches.',
     );
     return h('div', { class: 'codes-grid' },
       ...codes.map(c => h('div', { class: `code-chip code-${c.status}` },
@@ -1027,76 +1014,39 @@
     );
   }
 
-  // ── Admin: Voter Codes ────────────────────────────────────────────────────
+  // ── Admin: Signed In coaches ──────────────────────────────────────────────
   function renderAdminCodes() {
     const s = S.state;
-    const e = s.election;
-    const counts = s.counts || {};
     const codes = s.codes || [];
-    const need = Math.max(0, counts.expected - counts.total_codes);
-
     const wrap = h('div', {});
     wrap.append(
       h('div', { class: 'page-h' },
-        h('h2', {}, 'Voter Codes'),
-        h('div', { class: 'page-actions' },
-          h('button', { class: 'btn btn-secondary', onclick: clearUnclaimed }, 'Clear unclaimed'),
-        ),
+        h('h2', {}, `Signed In (${codes.length})`),
       ),
-      h('div', { class: 'panel' },
-        h('div', { class: 'gen-row' },
-          h('div', {},
-            h('div', {}, `Have ${counts.total_codes} of ${counts.expected} expected.`),
-            h('div', { class: 'micro' }, need > 0 ? `Need ${need} more.` : 'You can generate extras at any time.'),
-          ),
-          h('div', { class: 'gen-input' },
-            h('input', { type: 'number', min: 1, max: 100, value: need || 1, id: 'gen-n' }),
-            h('button', { class: 'btn btn-primary', onclick: () => generateCodes() }, 'Generate codes'),
-          ),
-        ),
-      ),
-      codes.length ? h('div', { class: 'panel' },
-        h('div', { class: 'panel-h' }, h('h3', {}, `Distribute (${codes.length})`),
-          h('button', { class: 'btn btn-sm btn-secondary', onclick: () => copyCodes(codes) }, '📋 Copy list'),
-        ),
-        h('div', { class: 'codes-print' },
-          ...codes.map(c => h('div', { class: `code-print-row code-${c.status}` },
-            h('span', { class: 'code-print-word' }, c.word),
-            h('span', { class: `pill pill-${c.status}` }, c.status.replace('_', ' ')),
-            !c.revoked
-              ? h('button', { class: 'btn btn-sm btn-danger-outline', onclick: () => revokeCode(c.id, c.word) }, 'Revoke')
-              : h('button', { class: 'btn btn-sm btn-secondary', onclick: () => unrevokeCode(c.id) }, 'Un-revoke'),
-          ))
-        ),
-      ) : null,
+      codes.length
+        ? h('div', { class: 'panel' },
+            h('div', { class: 'codes-print' },
+              ...codes.map(c => h('div', { class: `code-print-row code-${c.status}` },
+                h('span', { class: 'code-print-word' }, `Coach #${c.word}`),
+                h('span', { class: `pill pill-${c.status}` }, c.status.replace('_', ' ')),
+                !c.revoked
+                  ? h('button', { class: 'btn btn-sm btn-danger-outline', onclick: () => revokeCode(c.id, c.word) }, 'Revoke')
+                  : h('button', { class: 'btn btn-sm btn-secondary', onclick: () => unrevokeCode(c.id) }, 'Un-revoke'),
+              ))
+            ),
+          )
+        : h('div', { class: 'panel' }, h('div', { class: 'muted' }, 'No coaches have signed in yet. Share the election URL and password with your coaches.')),
     );
     return wrap;
   }
 
-  async function generateCodes() {
-    const n = parseInt($('#gen-n').value, 10) || 1;
-    try {
-      const r = await api('codes', 'generate', { n });
-      toast(`Generated ${r.added.length} codes.`, 'success');
-      pollOnce();
-    } catch (e) { toast(e.message, 'error'); }
-  }
-  function copyCodes(codes) {
-    const txt = codes.map(c => c.word).join('\n');
-    navigator.clipboard.writeText(txt).then(() => toast('Copied.', 'success'), () => toast('Copy failed', 'error'));
-  }
   function revokeCode(id, word) {
-    confirmDialog('Revoke code?', `Revoking "${word}" will sign out that coach immediately and prevent them from submitting.`,
+    confirmDialog('Revoke this coach?', `Revoking Coach #${word} will sign them out immediately and prevent them from submitting in any round.`,
       async () => { try { await api('codes', 'revoke', { voter_code_id: id }); pollOnce(); } catch (e) { toast(e.message, 'error'); } },
       'Revoke', true);
   }
   async function unrevokeCode(id) {
     try { await api('codes', 'unrevoke', { voter_code_id: id }); pollOnce(); } catch (e) { toast(e.message, 'error'); }
-  }
-  async function clearUnclaimed() {
-    confirmDialog('Clear unclaimed codes?', 'This removes any codes that have not been claimed yet. Claimed codes are untouched.',
-      async () => { try { const r = await api('codes', 'clear_unclaimed', {}); toast(`Removed ${r.removed}.`, 'success'); pollOnce(); } catch (e) { toast(e.message, 'error'); } },
-      'Clear', true);
   }
 
   // ── Admin: Setup (players + rounds editor) ─────────────────────────────────
@@ -1149,22 +1099,24 @@
 
   function renderElectionMeta(e) {
     const nameIn = h('input', { value: e.name });
-    const expIn  = h('input', { type: 'number', min: 1, max: 500, value: e.expected_voters });
     const maxIn  = h('input', { type: 'number', min: 1, max: 100, value: e.max_roster_size ?? 12 });
+    const pwIn   = h('input', { type: 'password', placeholder: '(leave blank to keep current)', autocomplete: 'off' });
     return h('div', { class: 'form-grid' },
       h('label', {}, 'Name'), nameIn,
       h('label', {}, 'Vote code'), h('input', { value: e.vote_code, disabled: true }),
-      h('label', {}, 'Expected voters'), expIn,
       h('label', {}, 'Max roster size'), maxIn,
+      h('label', {}, 'Coach password'), pwIn,
       h('div', {}, ''),
       h('button', { class: 'btn btn-primary btn-sm', onclick: async () => {
         try {
-          await api('elections', 'update', {
+          const body = {
             id: e.id,
             name: nameIn.value,
-            expected_voters: parseInt(expIn.value, 10) || 0,
             max_roster_size: parseInt(maxIn.value, 10) || 12,
-          });
+          };
+          if (pwIn.value) body.coach_password = pwIn.value;
+          await api('elections', 'update', body);
+          pwIn.value = '';
           toast('Saved.', 'success'); pollOnce();
         } catch (e) { toast(e.message, 'error'); }
       } }, 'Save'),
@@ -1490,8 +1442,8 @@
     const overlay = h('div', { class: 'overlay' });
     const name = h('input', { placeholder: 'e.g., Majors International' });
     const code = h('input', { placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off' });
-    const exp  = h('input', { type: 'number', min: 1, value: 12 });
     const maxRoster = h('input', { type: 'number', min: 1, max: 100, value: 12 });
+    const pw   = h('input', { type: 'password', placeholder: 'shared password for all coaches', autocomplete: 'off' });
     const players = h('textarea', { rows: 8, placeholder: 'Optional: one player per line ("Name, Jersey")' });
 
     overlay.append(h('div', { class: 'modal modal-lg' },
@@ -1499,11 +1451,11 @@
       h('div', { class: 'form-grid' },
         h('label', {}, 'Name'), name,
         h('label', {}, 'Vote code'), code,
-        h('label', {}, 'Expected voters'), exp,
         h('label', {}, 'Max roster size'), maxRoster,
+        h('label', {}, 'Coach password'), pw,
       ),
       h('p', { class: 'muted', style: { marginTop: '10px' } },
-        'Rounds are configured one at a time as you run them — you\'ll set Picks per coach and Picks to lock when you click "Start Next Round". Run as many rounds as you need until the roster is full or you choose to finalize.'),
+        'All coaches use the same Coach password to sign in. Each device that signs in gets the next available Coach number (1, 2, 3, …). Rounds are configured one at a time as you click "Start Next Round".'),
       h('div', { class: 'sep' }, 'Players (optional — can add later)'),
       players,
       h('div', { class: 'modal-actions' },
@@ -1517,8 +1469,8 @@
             await api('elections', 'create', {
               name: name.value.trim(),
               vote_code: code.value.trim().toLowerCase(),
-              expected_voters: parseInt(exp.value, 10) || 0,
               max_roster_size: parseInt(maxRoster.value, 10) || 12,
+              coach_password: pw.value,
               players: playerList,
             });
             overlay.remove();

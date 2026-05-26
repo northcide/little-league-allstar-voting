@@ -181,8 +181,7 @@ try {
             if ($c['revoked'])         $c['status'] = 'revoked';
             elseif ($c['submitted'])   $c['status'] = 'submitted';
             elseif ($c['logged_in'])   $c['status'] = 'logged_in';
-            elseif ($c['claimed'])     $c['status'] = 'claimed';
-            else                       $c['status'] = 'unclaimed';
+            else                       $c['status'] = 'signed_in';
             $c['revoked'] = (bool)$c['revoked'];
         }
         unset($c);
@@ -224,12 +223,12 @@ try {
         $resp['current_round'] = $currentRound;
         $resp['round_tallies'] = $roundTallies;
         $resp['round_tied_ids'] = $roundTiedIds;
+        $signedIn = count(array_filter($codes, fn($c) => !$c['revoked']));
         $resp['counts']   = [
-            'expected'      => (int)$e['expected_voters'],
-            'total_codes'   => count($codes),
+            'signed_in'     => $signedIn,
             'logged_in'     => $loggedIn,
             'submitted'     => $submitted,
-            'outstanding'   => max(0, (int)$e['expected_voters'] - $submitted),
+            'outstanding'   => max(0, $signedIn - $submitted),
             'roster_locked' => count($resp['locked']),
             'roster_max'    => (int)$e['max_roster_size'],
         ];

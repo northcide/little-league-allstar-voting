@@ -8,18 +8,21 @@ controls.
 ## Features
 
 - **Admin** creates named elections (e.g., "Majors International"), sets the
-  player roster, sets a target roster size, and generates sequential numeric
-  codes (1, 2, 3, …) to hand to each coach.
+  player roster, sets a target roster size, and picks a single shared coach
+  password.
+- **Coaches sign in** by picking the election from the public list and
+  entering the shared password. The first device to sign in is auto-assigned
+  Coach #1, the second is #2, etc. Cookies keep each device tied to its
+  assigned number across reloads.
 - **Dynamic rounds**: rounds are created one at a time. Each time the admin
   clicks **Start Next Round**, they enter that round's *Picks per coach* and
   *Picks to lock* — defaults match the previous round. There's no upfront
   round configuration and no preset number of rounds. The admin decides when
   to keep going and when to **Finalize All Rounds**.
-- **Coach** logs in with the election code + their word, picks players each
-  round (multi-select, no ranking), and submits. Submitted ballots are locked
-  unless the admin resets them.
-- **Live admin dashboard** (2-second polling): expected voters, # logged in, #
-  submitted this round, # outstanding, plus a per-code badge grid.
+- **Coach** picks players each round (multi-select, no ranking), and submits.
+  Submitted ballots are locked unless the admin resets them.
+- **Live admin dashboard** (2-second polling): coaches signed in, # logged
+  in, # submitted this round, # outstanding, plus a per-coach badge grid.
 - **Locked players** from prior rounds appear inline in the next ballot, grayed
   out and unselectable. The ballot is grouped by round so coaches see which
   players were locked in each round.
@@ -78,16 +81,28 @@ What the system *does* prevent reliably:
   `UNIQUE(round_id, voter_code_id)` constraint).
 - A coach cannot change their submitted ballot without admin intervention.
 
-## Voter codes
+## Signing coaches in
 
-The admin clicks "Generate codes (n)" and the system creates `n` sequential
-numeric codes (1, 2, 3, …) for that election. Subsequent generate calls pick
-up where the count left off. Distribute one number per coach via text/print
-without recording who got which number.
+Each election has a single shared coach password. The admin sets it when
+creating the election (or changes it later from the Setup page). Coaches:
 
-Coaches log in with the election's vote_code plus their number. Admins can
-also share a URL of the form `https://yoursite/allstar/?e=<vote_code>` —
-coaches who use it only have to enter their number.
+1. Open the site (or a `?e=<vote_code>` direct link).
+2. Pick the election from the public list.
+3. Enter the shared password.
+
+The first device to sign in becomes Coach #1, the next is #2, etc. A
+session cookie keeps that device tied to its assigned number across page
+reloads. Once a coach is signed in, their number is shown in the top bar.
+
+The admin can revoke any coach number from the **Signed In** page — that
+immediately signs them out and prevents them from submitting future
+ballots. This is the equivalent of removing a coach mid-election.
+
+Trust model: the password gates entry, but anyone with the password can
+sign in. The intended use is in-person at the league event where coaches
+sign in on their own devices once. If you need stronger per-coach
+identity (e.g., remote / unsupervised voting), this app isn't the right
+tool.
 
 ## Tech notes
 

@@ -165,10 +165,10 @@ try {
                 $pIns->execute([$rid, $ballotToken, $pid]);
             }
 
-            // Update round state to all_submitted if everyone is in
+            // Update round state to all_submitted if every signed-in coach has voted
             $submitted = (int)$db->query("SELECT COUNT(*) FROM submissions WHERE round_id={$rid}")->fetchColumn();
-            $expected  = (int)$db->query("SELECT expected_voters FROM elections WHERE id={$eid}")->fetchColumn();
-            if ($submitted >= $expected) {
+            $signedIn  = (int)$db->query("SELECT COUNT(*) FROM voter_codes WHERE election_id={$eid} AND revoked=0")->fetchColumn();
+            if ($signedIn > 0 && $submitted >= $signedIn) {
                 $db->prepare("UPDATE rounds SET state='all_submitted' WHERE id=? AND state='active'")->execute([$rid]);
             }
 

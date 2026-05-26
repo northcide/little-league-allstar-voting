@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS elections (
   status          ENUM('setup','active','completed','archived') NOT NULL DEFAULT 'setup',
   expected_voters INT NOT NULL DEFAULT 0,
   max_roster_size INT NOT NULL DEFAULT 12,
+  coach_password  VARCHAR(255) DEFAULT NULL,
   current_round   INT NOT NULL DEFAULT 0,
   created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

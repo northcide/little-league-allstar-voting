@@ -27,4 +27,14 @@ SET @s := IF(@c = 1,
   'SELECT "skip: rounds.is_tiebreak already removed" AS migration');
 PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
+-- ── 3. Add elections.coach_password (introduced 2026-05-26 with shared-password auth) ──
+SET @c := (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND TABLE_NAME   = 'elections'
+             AND COLUMN_NAME  = 'coach_password');
+SET @s := IF(@c = 0,
+  'ALTER TABLE elections ADD COLUMN coach_password VARCHAR(255) DEFAULT NULL AFTER max_roster_size',
+  'SELECT "skip: elections.coach_password already exists" AS migration');
+PREPARE stmt FROM @s; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
 -- Add future migrations below as additional blocks of the same shape.

@@ -87,12 +87,12 @@ try {
             if ($round['state'] === 'finalized') { $db->rollBack(); jsonError('Already finalized', 409); }
             if ($round['state'] === 'pending')   { $db->rollBack(); jsonError('Round has not started', 409); }
 
-            // Determine expected vs submitted
-            $expected  = (int)$db->query("SELECT expected_voters FROM elections WHERE id={$eid}")->fetchColumn();
+            // Gate on signed-in coaches (count of non-revoked voter_codes), not pre-set expected_voters
+            $signedIn  = (int)$db->query("SELECT COUNT(*) FROM voter_codes WHERE election_id={$eid} AND revoked=0")->fetchColumn();
             $submitted = (int)$db->query("SELECT COUNT(*) FROM submissions WHERE round_id={$rid}")->fetchColumn();
-            if (!$override && $submitted < $expected) {
+            if (!$override && $submitted < $signedIn) {
                 $db->rollBack();
-                jsonError("Only {$submitted}/{$expected} submitted. Use override to force-finalize.", 409);
+                jsonError("Only {$submitted}/{$signedIn} coaches have submitted. Use override to force-finalize.", 409);
             }
 
             // Tally — ONLY join ballot_picks (anonymity boundary)

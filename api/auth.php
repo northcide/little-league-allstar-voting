@@ -73,54 +73,69 @@ try {
     }
 
     if ($action === 'coach_login') {
+        // New flow (2026-05-26): coach enters the election's shared password.
+        // We auto-assign the next sequential coach number, persist the
+        // session_token on a voter_codes row, and rely on cookies to keep
+        // this device tied to that number across page reloads.
         $ip = $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
         checkRateLimit($ip);
         validateCsrf();
 
         $data     = getInput();
         $voteCode = strtolower(trim($data['vote_code'] ?? ''));
-        $word     = strtolower(trim($data['word'] ?? ''));
+        $password = (string)($data['password'] ?? '');
 
-        if ($voteCode === '' || $word === '') jsonError('Election code and number are required');
+        if ($voteCode === '' || $password === '') jsonError('Election and password are required');
 
-        // Find election by vote_code (case-insensitive via utf8mb4_unicode_ci)
-        $stmt = $db->prepare("SELECT id, name, status, expected_voters, current_round FROM elections WHERE LOWER(vote_code)=? AND status IN ('active','setup','completed') LIMIT 1");
+        // Find election by vote_code (case-insensitive)
+        $stmt = $db->prepare("SELECT id, name, status, expected_voters, current_round, coach_password FROM elections WHERE LOWER(vote_code)=? AND status IN ('active','completed') LIMIT 1");
         $stmt->execute([$voteCode]);
         $election = $stmt->fetch();
         if (!$election) {
             recordFailedLogin($ip);
-            jsonError('Election code not found', 401);
-        }
-        if ($election['status'] === 'setup') {
-            jsonError('This election has not started yet. Please wait for the admin to activate it.', 403);
+            jsonError('Election not found or not active', 401);
         }
         if ($election['status'] === 'archived') {
             jsonError('This election is archived.', 403);
         }
-
-        // Find word code for this election
-        $stmt = $db->prepare("SELECT * FROM voter_codes WHERE election_id=? AND LOWER(word)=? LIMIT 1");
-        $stmt->execute([$election['id'], $word]);
-        $vc = $stmt->fetch();
-        if (!$vc || $vc['revoked']) {
+        if (empty($election['coach_password']) || !password_verify($password, $election['coach_password'])) {
             recordFailedLogin($ip);
-            jsonError('Number not found for this election', 401);
+            jsonError('Wrong password', 401);
         }
 
         clearRateLimit($ip);
 
-        // Resume or claim
-        $token = $vc['session_token'];
-        if (!$token) {
-            $token = makeSessionToken();
-            $db->prepare("UPDATE voter_codes SET session_token=?, claimed_at=NOW(), last_seen_at=NOW() WHERE id=?")
-               ->execute([$token, $vc['id']]);
-            audit($db, (int)$election['id'], 'coach', 'claim_word', ['word' => $word]);
+        // Resume if this session already has a voter_token for this election
+        $existingToken = $_SESSION['voter_token'] ?? '';
+        $vc = null;
+        if ($existingToken) {
+            $stmt = $db->prepare("SELECT * FROM voter_codes WHERE election_id=? AND session_token=? AND revoked=0 LIMIT 1");
+            $stmt->execute([(int)$election['id'], $existingToken]);
+            $vc = $stmt->fetch() ?: null;
+        }
+
+        if ($vc) {
+            // Existing assignment for this device — just refresh last_seen
+            $token = $vc['session_token'];
+            $db->prepare("UPDATE voter_codes SET last_seen_at=NOW() WHERE id=?")->execute([$vc['id']]);
         } else {
-            // Rotate the token on a fresh login from a different browser
-            $token = makeSessionToken();
-            $db->prepare("UPDATE voter_codes SET session_token=?, last_seen_at=NOW() WHERE id=?")
-               ->execute([$token, $vc['id']]);
+            // Allocate the next sequential coach number for this election
+            $db->beginTransaction();
+            try {
+                $maxStmt = $db->prepare("SELECT COALESCE(MAX(CAST(word AS UNSIGNED)), 0) FROM voter_codes WHERE election_id=?");
+                $maxStmt->execute([(int)$election['id']]);
+                $nextNum = (int)$maxStmt->fetchColumn() + 1;
+                $token   = makeSessionToken();
+                $ins = $db->prepare("INSERT INTO voter_codes (election_id, word, session_token, claimed_at, last_seen_at) VALUES (?,?,?,NOW(),NOW())");
+                $ins->execute([(int)$election['id'], (string)$nextNum, $token]);
+                $vcId = (int)$db->lastInsertId();
+                audit($db, (int)$election['id'], 'coach', 'assign_coach', ['coach_num' => $nextNum]);
+                $db->commit();
+                $vc = ['id' => $vcId, 'word' => (string)$nextNum];
+            } catch (Throwable $ex) {
+                if ($db->inTransaction()) $db->rollBack();
+                jsonError('Failed to assign a coach number', 500);
+            }
         }
 
         session_regenerate_id(true);
