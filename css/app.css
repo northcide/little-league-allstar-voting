@@ -520,26 +520,14 @@ p  { margin: 0 0 8px; }
   color: var(--ink-3);
   opacity: .55;
 }
-.ballot-cell.locked .ballot-cell-name {
-  color: var(--ink-3);
-  text-decoration: line-through;
-  text-decoration-color: rgba(15, 27, 51, .35);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 2px;
-}
+.ballot-cell.locked .ballot-cell-name { color: var(--ink-3); }
 .ballot-cell.locked .ballot-cell-jersey { opacity: .55; }
 .ballot-cell.locked.alt {
   background:
     linear-gradient(to right, var(--gold-d) 0 5px, transparent 5px),
     var(--gold-bg);
 }
-.ballot-cell.locked.alt .ballot-cell-name {
-  color: var(--ink-2);
-  text-decoration: line-through;
-  text-decoration-color: rgba(15, 27, 51, .35);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 2px;
-}
+.ballot-cell.locked.alt .ballot-cell-name { color: var(--ink-2); }
 .ballot-cell.submitted:not(.checked):not(.ranked) { opacity: .6; cursor: default; font-style: italic; }
 .ballot-cell.submitted.checked, .ballot-cell.submitted.ranked { cursor: default; opacity: 1; }
 .ballot-grid.readonly .ballot-cell { cursor: default; }
