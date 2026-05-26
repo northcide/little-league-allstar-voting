@@ -9,27 +9,27 @@
 
 /* ── Design tokens ───────────────────────────────────────────────────────── */
 :root {
-  /* paper & ink — cool newsprint, panels pop as cleaner near-white */
-  --paper:     #E9E7DF;   /* page bg: warm-neutral off-white (was too yellow) */
-  --paper-2:   #FAF9F3;   /* panel surfaces: crisp newsprint */
-  --paper-3:   #D8D5C7;   /* recessed / hover */
-  --ink:       #0F1B33;
-  --ink-2:     #2A3654;
-  --ink-3:     #6D6857;
-  --rule:      #BDB7A4;
-  --rule-soft: #D5D0BD;
+  /* paper & ink — cleaner near-white, modern not "antique paper" */
+  --paper:     #EFEEEA;   /* page bg: neutral with a whisper of warmth */
+  --paper-2:   #FCFCFA;   /* panel surfaces: near-white */
+  --paper-3:   #E3E1DA;   /* recessed / hover */
+  --ink:       #101935;
+  --ink-2:     #2C3656;
+  --ink-3:     #6B6C71;
+  --rule:      #B8B7B0;
+  --rule-soft: #D9D7D0;
 
-  /* accents — slightly less saturated, less "antique" */
-  --red:      #C03048;
-  --red-d:    #94223A;
-  --red-bg:   #F4DDE2;
-  --gold:     #E2D2A6;
-  --gold-d:   #A88E54;
-  --amber:    #ECD5A0;
-  --amber-d:  #9D7220;
-  --green:    #5A8438;
-  --green-d:  #3E6122;
-  --green-bg: #E0E9CA;
+  /* accents */
+  --red:      #C9304A;
+  --red-d:    #962238;
+  --red-bg:   #F5DCE1;
+  --gold:     #D6BE85;       /* reserved for alternate-round identity only */
+  --gold-d:   #927846;
+  --amber:    #EDD79E;
+  --amber-d:  #9B7224;
+  --green:    #4F8A38;
+  --green-d:  #356420;
+  --green-bg: #DEE9CC;
 
   /* legacy aliases — every existing rule keeps working under the new palette */
   --bg:            var(--paper);
@@ -65,15 +65,15 @@
   /* chrome */
   --topbar-h: 64px;
 
-  /* shadows (newsprint-offset feel) */
-  --shadow:       2px 2px 0 rgba(15,27,51,.12);
-  --shadow-hover: 3px 3px 0 rgba(15,27,51,.18);
-  --shadow-lg:    0 18px 40px -10px rgba(15,27,51,.35), 0 4px 12px rgba(15,27,51,.18);
+  /* shadows — soft modern drops, not vintage offset */
+  --shadow:       0 1px 0 rgba(16,25,53,.04), 0 4px 14px -6px rgba(16,25,53,.10);
+  --shadow-hover: 0 1px 0 rgba(16,25,53,.04), 0 10px 24px -10px rgba(16,25,53,.20);
+  --shadow-lg:    0 18px 40px -10px rgba(16,25,53,.30), 0 4px 12px rgba(16,25,53,.14);
 
   /* type */
-  --ff-display:    "Big Shoulders Display", "Arial Narrow", sans-serif;
+  --ff-display:    "Bricolage Grotesque", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --ff-serif:      "Source Serif 4", "Source Serif Pro", Georgia, serif;
-  --tracking-caps: .12em;
+  --tracking-caps: .08em;
 }
 
 /* ── Reset + base ────────────────────────────────────────────────────────── */
@@ -85,10 +85,6 @@ body {
   line-height: 1.55;
   color: var(--ink);
   background-color: var(--paper);
-  /* Inline data-URI: a subtle SVG turbulence noise tile, ~6% opacity, fixed
-     so it doesn't scroll-shift. Gives the page atmospheric paper grain. */
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.06  0 0 0 0 0.10  0 0 0 0 0.20  0 0 0 0.08 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-  background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -96,8 +92,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; background: none; border: 0; padding: 0; }
 a { color: var(--ink); }
 h1, h2, h3, h4, h5 { font-family: var(--ff-display); font-weight: 800; letter-spacing: .01em; margin: 0; color: var(--ink); }
-h2 { font-size: 38px; line-height: 1; text-transform: uppercase; }
-h3 { font-size: 17px; line-height: 1.1; text-transform: uppercase; letter-spacing: .04em; }
+h2 { font-size: 36px; line-height: 1.05; letter-spacing: -.015em; }
+h3 { font-size: 17px; line-height: 1.15; letter-spacing: -.005em; }
 h4 { font-size: 12px; line-height: 1; letter-spacing: var(--tracking-caps); text-transform: uppercase; color: var(--ink-3); }
 p  { margin: 0 0 8px; }
 /* Tabular numerals everywhere numbers matter */
@@ -107,13 +103,13 @@ p  { margin: 0 0 8px; }
 /* ── App shell ───────────────────────────────────────────────────────────── */
 #app { display: flex; flex-direction: column; min-height: 100vh; }
 
-/* ── Topbar — ink scoreboard with gold hairline ───────────────────────────── */
+/* ── Topbar — ink with a thin red accent rail ────────────────────────────── */
 #topbar {
   height: var(--topbar-h);
   background: var(--ink);
   color: var(--paper);
-  border-bottom: 1px solid var(--gold-d);
-  box-shadow: 0 2px 0 rgba(15,27,51,.18), 0 6px 14px -8px rgba(15,27,51,.4);
+  border-bottom: 2px solid var(--red);
+  box-shadow: 0 6px 16px -10px rgba(16,25,53,.35);
   position: sticky; top: 0; z-index: 50;
 }
 .topbar-inner {
@@ -127,14 +123,13 @@ p  { margin: 0 0 8px; }
 }
 .brand {
   font-family: var(--ff-display);
-  font-weight: 800;
-  font-size: 24px;
-  text-transform: uppercase;
-  letter-spacing: .04em;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -.005em;
   display: flex; align-items: center; gap: 8px;
-  padding-right: 20px;
-  margin-right: 20px;
-  border-right: 1px solid rgba(232,214,176,.22);
+  padding-right: 18px;
+  margin-right: 18px;
+  border-right: 1px solid rgba(255,255,255,.10);
   color: var(--paper);
 }
 .brand-icon { font-size: 24px; filter: drop-shadow(0 1px 0 rgba(0,0,0,.25)); }
@@ -142,25 +137,23 @@ p  { margin: 0 0 8px; }
   flex: 1;
   display: flex; align-items: center; gap: 10px;
   font-family: var(--ff-serif);
-  font-style: italic;
-  color: rgba(244,239,227,.85);
+  color: rgba(255,255,255,.82);
   font-size: 15px;
 }
-#topbar-context .league { font-weight: 700; font-style: normal; color: var(--paper); margin-right: 6px; }
-#topbar-context .sep { color: rgba(232,214,176,.5); margin: 0 4px; font-style: normal; }
+#topbar-context .league { font-weight: 700; color: var(--paper); margin-right: 6px; }
+#topbar-context .sep { color: rgba(255,255,255,.30); margin: 0 4px; }
 #topbar-actions {
   display: flex; align-items: center; gap: 8px;
-  padding-left: 18px;
-  border-left: 1px solid rgba(232,214,176,.22);
+  padding-left: 16px;
+  border-left: 1px solid rgba(255,255,255,.10);
 }
-/* Topbar buttons override their default ink-bg with a translucent gold treatment so they read on ink */
 #topbar-actions .btn {
   background: transparent;
   color: var(--paper);
-  border: 1.5px solid rgba(232,214,176,.45);
+  border: 1.5px solid rgba(255,255,255,.32);
   box-shadow: none;
 }
-#topbar-actions .btn:hover { background: rgba(232,214,176,.12); transform: none; box-shadow: none; }
+#topbar-actions .btn:hover { background: rgba(255,255,255,.08); transform: none; box-shadow: none; }
 
 /* ── Main — offset slightly left of center on wide screens ───────────────── */
 #main {
@@ -189,9 +182,9 @@ p  { margin: 0 0 8px; }
   border-bottom: 1px solid var(--ink);
 }
 .page-h h2 {
-  font-size: 38px;
-  line-height: .95;
-  letter-spacing: .005em;
+  font-size: 36px;
+  line-height: 1.02;
+  letter-spacing: -.018em;
 }
 .page-h h2 .copy-link {
   margin-left: 14px;
@@ -339,10 +332,9 @@ p  { margin: 0 0 8px; }
 }
 .panel-h h3 {
   font-family: var(--ff-display);
-  font-weight: 600;
-  font-size: 15px;
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -.005em;
   color: var(--ink);
 }
 .panel-h .micro { margin-left: auto; }
@@ -383,11 +375,11 @@ p  { margin: 0 0 8px; }
 }
 .counter-value {
   font-family: var(--ff-display);
-  font-weight: 800;
-  font-size: 56px;
-  line-height: .95;
+  font-weight: 700;
+  font-size: 46px;
+  line-height: 1;
   color: var(--ink);
-  letter-spacing: -.005em;
+  letter-spacing: -.02em;
   order: 2;
 }
 .counter-hint {
@@ -433,11 +425,12 @@ p  { margin: 0 0 8px; }
 .round-card-h:hover { background: var(--paper-3); }
 .round-card-h h3 {
   font-family: var(--ff-display);
-  font-weight: 800;
-  font-size: 22px;
-  letter-spacing: .015em;
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: -.01em;
   color: var(--ink);
   margin: 0;
+  text-transform: none;
 }
 .round-card-h .micro { margin-left: auto; }
 .round-card-chevron { font-size: 14px; width: 16px; text-align: center; color: var(--ink-3); flex-shrink: 0; }
@@ -452,24 +445,23 @@ p  { margin: 0 0 8px; }
   max-width: 920px; margin: 0 auto;
 }
 .round-header {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 12px;
   margin-bottom: 14px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   background: var(--ink);
   color: var(--paper);
-  border-bottom: 1px solid var(--gold-d);
+  border-bottom: 2px solid var(--red);
   border-radius: var(--radius);
 }
 .round-header .round-num {
   font-family: var(--ff-display);
-  font-weight: 800;
-  font-size: 24px;
-  text-transform: uppercase;
-  letter-spacing: .02em;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: -.005em;
   color: var(--paper);
 }
-.round-header .sep   { color: rgba(232,214,176,.55); }
-.round-header .micro { color: rgba(232,214,176,.85); font-style: italic; }
+.round-header .sep   { color: rgba(255,255,255,.30); }
+.round-header .micro { color: rgba(255,255,255,.78); font-style: italic; }
 .round-header .pill  { background: var(--gold); color: var(--ink); border-color: var(--gold-d); }
 .round-header .pill-warn { background: var(--amber); border-color: var(--amber-d); color: var(--ink); }
 
@@ -814,11 +806,12 @@ p  { margin: 0 0 8px; }
   padding: 34px 40px 32px;
 }
 .login-card h2 {
-  font-size: 42px;
-  line-height: .92;
+  font-size: 38px;
+  line-height: 1.0;
   color: var(--ink);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   text-align: left;
+  letter-spacing: -.02em;
 }
 .tagline { font-family: var(--ff-serif); font-style: italic; color: var(--ink-3); margin-bottom: 18px; }
 .login-tabs { display: flex; border-bottom: 1px solid var(--rule); margin-bottom: 20px; }
