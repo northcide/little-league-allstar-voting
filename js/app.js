@@ -434,13 +434,20 @@
     const players = s.players || [];
     const lockedIds = new Set((s.locked || []).map(l => l.player_id));
 
-    // Header strip
+    // Header strip — labels reflect round type
+    const isAlternateRound = round.round_type === 'alternate';
+    const roundLabel = isAlternateRound
+      ? `Alternate Round ${round.round_num}`
+      : `Round ${round.round_num}`;
     const headerBits = [
-      h('span', { class: 'round-num' }, `Round ${round.round_num}`),
+      h('span', { class: 'round-num' }, roundLabel),
+      isAlternateRound ? h('span', { class: 'pill pill-alt' }, '★ ALT') : null,
       h('span', { class: 'sep' }, '·'),
-      h('span', {}, `Pick ${round.picks_per_coach}`),
+      h('span', {}, isAlternateRound ? `Rank ${round.picks_per_coach}` : `Pick ${round.picks_per_coach}`),
       h('span', { class: 'sep' }, '·'),
-      h('span', { class: 'micro' }, `${round.picks_to_lock} will be locked in`),
+      h('span', { class: 'micro' }, isAlternateRound
+        ? `${round.picks_to_lock} alternate${round.picks_to_lock === 1 ? '' : 's'} locked in`
+        : `${round.picks_to_lock} will be locked in`),
     ];
 
     // Finalized: show winners + tie indicator (no raw vote counts for coaches)
@@ -448,14 +455,16 @@
       const winnersIds = new Set((round.winners || []).map(Number));
       const tieIds     = new Set((round.tie_player_ids || []).map(Number));
       const result = h('div', { class: 'results-card' },
-        h('h2', {}, `Round ${round.round_num} Results`),
+        h('h2', {}, `${roundLabel} Results`),
         round.has_tie_at_cutoff
-          ? h('div', { class: 'tie-note' }, '⚠ Tie at cutoff. The admin may start another round to break it.')
+          ? h('div', { class: 'tie-note' }, isAlternateRound
+              ? '⚠ Tie at cutoff. The admin may start another alternate round to break it.'
+              : '⚠ Tie at cutoff. The admin may start another round to break it.')
           : null,
-        h('h3', {}, 'Locked in this round'),
+        h('h3', {}, isAlternateRound ? 'Locked as alternates' : 'Locked in this round'),
         h('div', { class: 'winners-list' },
           ...players.filter(p => winnersIds.has(p.id)).map(p => playerChip(p, 'winner')),
-          winnersIds.size === 0 ? h('div', { class: 'muted' }, 'No new players locked.') : null,
+          winnersIds.size === 0 ? h('div', { class: 'muted' }, isAlternateRound ? 'No alternates locked.' : 'No new players locked.') : null,
         ),
         tieIds.size ? h('div', { class: 'tied-block' },
           h('h3', {}, 'Top players tied last round'),
