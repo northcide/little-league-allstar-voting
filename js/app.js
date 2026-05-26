@@ -325,6 +325,24 @@
           );
           setTimeout(() => word.focus(), 50);
         } else {
+          // Fetch active elections to offer as quick-pick. No auth required.
+          const listWrap = h('div', { class: 'election-picker' }, h('div', { class: 'muted' }, 'Loading elections…'));
+          api('elections', 'public_list').then(d => {
+            clear(listWrap);
+            const els = d.elections || [];
+            if (!els.length) {
+              listWrap.append(h('div', { class: 'muted' }, 'No active elections yet.'));
+              return;
+            }
+            listWrap.append(h('div', { class: 'election-picker-label' }, 'Pick your election:'));
+            for (const e of els) {
+              listWrap.append(h('button', {
+                class: 'btn btn-secondary election-pick-btn',
+                onclick: () => { window.location.search = '?e=' + encodeURIComponent(e.vote_code); },
+              }, e.name));
+            }
+          }).catch(() => { clear(listWrap); /* silent fail — manual entry still works */ });
+
           const code = h('input', { type: 'text', placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false' });
           btn.onclick = async () => {
             try { err.classList.add('hidden'); await coachLogin(code.value.trim(), word.value.trim()); }
@@ -332,13 +350,14 @@
           };
           word.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
           body.append(
-            h('p', { class: 'sub' }, 'Enter the election code and your Coach ID.'),
+            h('p', { class: 'sub' }, 'Pick your election below, or enter the codes manually.'),
             err,
+            listWrap,
+            h('div', { class: 'login-divider' }, 'or enter manually'),
             h('label', {}, 'Election Code'), code,
             h('label', {}, 'Coach ID'), word,
             btn,
           );
-          setTimeout(() => code.focus(), 50);
         }
       } else {
         const pin = h('input', { type: 'password', placeholder: 'Admin PIN' });
@@ -733,15 +752,42 @@
   }
 
   function renderAdminEmpty() {
-    return h('div', { class: 'admin-empty' },
-      h('div', { class: 'empty-card' },
-        h('h2', {}, 'Welcome, admin'),
-        h('p', {}, 'Create your first election to get started.'),
-        h('button', { class: 'btn btn-primary btn-lg', onclick: openCreateElection }, '+ Create Election'),
-        h('p', { class: 'micro' }, 'Or '),
-        h('button', { class: 'btn btn-secondary btn-sm', onclick: switchElection }, 'open an existing one'),
-      )
+    const card = h('div', { class: 'empty-card' },
+      h('h2', {}, 'Welcome, admin'),
     );
+    const listWrap = h('div', { class: 'admin-elist' }, h('div', { class: 'muted' }, 'Loading elections…'));
+    card.append(listWrap);
+    card.append(h('button', { class: 'btn btn-primary btn-lg', onclick: openCreateElection }, '+ Create New Election'));
+
+    api('elections', 'list').then(d => {
+      clear(listWrap);
+      const els = (d.elections || []).filter(e => e.status !== 'archived');
+      if (!els.length) {
+        listWrap.append(h('p', {}, 'No elections yet. Create one to get started:'));
+        return;
+      }
+      listWrap.append(h('div', { class: 'admin-elist-label' }, 'Open an election:'));
+      for (const e of els) {
+        listWrap.append(h('button', {
+          class: 'admin-elist-row',
+          onclick: async () => {
+            try { await api('elections', 'select', { id: e.id }); pollOnce(); }
+            catch (err) { toast(err.message, 'error'); }
+          },
+        },
+          h('div', { class: 'admin-elist-name' }, e.name),
+          h('div', { class: 'admin-elist-meta' },
+            h('span', { class: `pill pill-${e.status}` }, e.status),
+            ` · code: ${e.vote_code} · ${e.player_count} players · ${e.code_count} codes`,
+          ),
+        ));
+      }
+    }).catch(err => {
+      clear(listWrap);
+      listWrap.append(h('div', { class: 'banner banner-error' }, err.message));
+    });
+
+    return h('div', { class: 'admin-empty' }, card);
   }
 
   function renderAdminDashboard() {

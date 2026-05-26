@@ -5,6 +5,16 @@ $action = getAction();
 $db     = getDB();
 
 try {
+    // ── Public: minimal list of active elections for the login screen ────────
+    // Returns only name + vote_code (no counts, no status of setup/archived)
+    // so an unauthenticated visitor can pick an election to log in to.
+    if ($action === 'public_list') {
+        $rows = $db->query(
+            "SELECT name, vote_code FROM elections WHERE status='active' ORDER BY created_at DESC"
+        )->fetchAll();
+        jsonResponse(['elections' => $rows]);
+    }
+
     requireAdmin();
 
     if ($action === 'list') {
