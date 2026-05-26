@@ -1100,7 +1100,13 @@
   function renderElectionMeta(e) {
     const nameIn = h('input', { value: e.name });
     const maxIn  = h('input', { type: 'number', min: 1, max: 100, value: e.max_roster_size ?? 12 });
-    const pwIn   = h('input', { type: 'password', placeholder: '(leave blank to keep current)', autocomplete: 'off' });
+    // Show the current coach password as plaintext. If the stored value is a
+    // legacy bcrypt hash, blank the field and prompt to set a new one.
+    const stored = (e.coach_password || '').toString();
+    const isLegacyHash = /^\$2[aby]\$/.test(stored);
+    const pwIn   = h('input', { type: 'text', autocomplete: 'off',
+                                placeholder: isLegacyHash ? 'set a new password (current is a legacy hash)' : '',
+                                value: isLegacyHash ? '' : stored });
     return h('div', { class: 'form-grid' },
       h('label', {}, 'Name'), nameIn,
       h('label', {}, 'Vote code'), h('input', { value: e.vote_code, disabled: true }),
@@ -1114,9 +1120,9 @@
             name: nameIn.value,
             max_roster_size: parseInt(maxIn.value, 10) || 12,
           };
-          if (pwIn.value) body.coach_password = pwIn.value;
+          // Send the password only if changed (and non-empty)
+          if (pwIn.value && pwIn.value !== stored) body.coach_password = pwIn.value;
           await api('elections', 'update', body);
-          pwIn.value = '';
           toast('Saved.', 'success'); pollOnce();
         } catch (e) { toast(e.message, 'error'); }
       } }, 'Save'),
@@ -1443,7 +1449,7 @@
     const name = h('input', { placeholder: 'e.g., Majors International' });
     const code = h('input', { placeholder: 'e.g., majors2026', autocomplete: 'off', autocapitalize: 'off' });
     const maxRoster = h('input', { type: 'number', min: 1, max: 100, value: 12 });
-    const pw   = h('input', { type: 'password', placeholder: 'shared password for all coaches', autocomplete: 'off' });
+    const pw   = h('input', { type: 'text', placeholder: 'shared password for all coaches', autocomplete: 'off' });
     const players = h('textarea', { rows: 8, placeholder: 'Optional: one player per line ("Name, Jersey")' });
 
     overlay.append(h('div', { class: 'modal modal-lg' },

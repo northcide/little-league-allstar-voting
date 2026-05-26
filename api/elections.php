@@ -19,7 +19,7 @@ try {
 
     if ($action === 'list') {
         $rows = $db->query(
-            "SELECT e.id, e.name, e.vote_code, e.status, e.expected_voters, e.max_roster_size, e.current_round,
+            "SELECT e.id, e.name, e.vote_code, e.status, e.expected_voters, e.max_roster_size, e.coach_password, e.current_round,
                     (SELECT COUNT(*) FROM players p WHERE p.election_id=e.id AND p.active=1) AS player_count,
                     (SELECT COUNT(*) FROM voter_codes v WHERE v.election_id=e.id) AS code_count,
                     (SELECT COUNT(*) FROM rounds r WHERE r.election_id=e.id) AS round_count
@@ -70,8 +70,10 @@ try {
 
         $db->beginTransaction();
         try {
+            // Store the coach password as plaintext so admins can view/share it later
+            // — it's already a shared secret distributed to every coach.
             $ins = $db->prepare("INSERT INTO elections (name, vote_code, status, expected_voters, max_roster_size, coach_password) VALUES (?,?,?,0,?,?)");
-            $ins->execute([$name, $voteCode, 'setup', $maxRoster, password_hash($coachPw, PASSWORD_DEFAULT)]);
+            $ins->execute([$name, $voteCode, 'setup', $maxRoster, $coachPw]);
             $eid = (int)$db->lastInsertId();
 
             // Players, if provided
@@ -110,7 +112,7 @@ try {
         if (!empty($d['coach_password'])) {
             $pw = (string)$d['coach_password'];
             if (strlen($pw) < 4) jsonError('Coach password must be at least 4 characters');
-            $sets[] = 'coach_password=?'; $args[] = password_hash($pw, PASSWORD_DEFAULT);
+            $sets[] = 'coach_password=?'; $args[] = $pw;
         }
         if (isset($d['max_roster_size'])) {
             $m = (int)$d['max_roster_size'];

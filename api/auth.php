@@ -98,7 +98,18 @@ try {
         if ($election['status'] === 'archived') {
             jsonError('This election is archived.', 403);
         }
-        if (empty($election['coach_password']) || !password_verify($password, $election['coach_password'])) {
+        // Coach passwords are stored as plaintext (shared secret, visible to admin).
+        // Legacy values from before this change are bcrypt hashes ($2y$…); accept both.
+        $stored = (string)($election['coach_password'] ?? '');
+        $ok = false;
+        if ($stored !== '') {
+            if (str_starts_with($stored, '$2y$') || str_starts_with($stored, '$2a$') || str_starts_with($stored, '$2b$')) {
+                $ok = password_verify($password, $stored);
+            } else {
+                $ok = hash_equals($stored, $password);
+            }
+        }
+        if (!$ok) {
             recordFailedLogin($ip);
             jsonError('Wrong password', 401);
         }
