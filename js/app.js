@@ -1731,21 +1731,17 @@
       } catch (e) { toast(e.message, 'error'); }
     };
 
-    overlay.append(h('div', { class: 'modal modal-lg' },
+    overlay.append(h('div', { class: 'modal modal-lg alt-modal' },
       h('h3', {}, isTieResolution ? 'Resolve alternate tie' : 'Start alternate round'),
       h('p', { class: 'muted' }, isTieResolution
-        ? `The previous alternate round had a tie at cutoff. Coaches will re-rank the tied players to break it — you can also add other candidates if you want.`
-        : `Coaches will rank the chosen candidates. The top players by Borda count become alternates in that order.`),
-      h('div', { class: 'form-grid' },
+        ? 'Previous alternate round tied at cutoff. Coaches will re-rank the tied players to break it.'
+        : 'Coaches rank the chosen candidates. Top players by Borda count become alternates in order.'),
+      h('div', { class: 'form-grid alt-form' },
         h('label', {}, 'Picks per coach'), ppcIn,
-        h('label', {}, 'Alternates to lock in'), slotsIn,
+        h('label', {}, 'Alternates to lock'), slotsIn,
       ),
-      h('p', { class: 'micro' }, 'Each coach ranks "Picks per coach" players. The top "Alternates to lock in" by Borda count become alternates in that order. Picks per coach ≥ Alternates to lock in.'),
-      h('div', { class: 'sep' }, `Candidates (${allActive.length} available)`),
-      h('p', { class: 'muted', style: { marginTop: '4px' } },
-        isTieResolution
-          ? 'Tied players from the previous alternate round are pre-checked.'
-          : 'Players who got votes in any finalized round are pre-checked. Add others as needed.'),
+      h('p', { class: 'micro' }, 'Picks per coach ≥ Alternates to lock.'),
+      h('div', { class: 'sep' }, `Candidates (${allActive.length})`),
       h('div', { class: 'alt-cand-toolbar' },
         selectAllBtn,
         selectPriorBtn,
