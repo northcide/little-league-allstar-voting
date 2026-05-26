@@ -1733,16 +1733,13 @@
 
     overlay.append(h('div', { class: 'modal modal-lg alt-modal' },
       h('h3', {}, isTieResolution ? 'Resolve alternate tie' : 'Start alternate round'),
-      h('p', { class: 'muted' }, isTieResolution
-        ? 'Previous alternate round tied at cutoff. Coaches will re-rank the tied players to break it.'
-        : 'Coaches rank the chosen candidates. Top players by Borda count become alternates in order.'),
-      h('div', { class: 'form-grid alt-form' },
-        h('label', {}, 'Picks per coach'), ppcIn,
-        h('label', {}, 'Alternates to lock'), slotsIn,
+      h('div', { class: 'alt-form' },
+        h('label', {}, 'Picks per coach', ppcIn),
+        h('label', {}, 'Alternates to lock', slotsIn),
+        h('span', { class: 'micro' }, 'picks ≥ alternates'),
       ),
-      h('p', { class: 'micro' }, 'Picks per coach ≥ Alternates to lock.'),
-      h('div', { class: 'sep' }, `Candidates (${allActive.length})`),
       h('div', { class: 'alt-cand-toolbar' },
+        h('span', { class: 'alt-cand-header' }, `Candidates (${allActive.length})`),
         selectAllBtn,
         selectPriorBtn,
         selectedCountEl,
