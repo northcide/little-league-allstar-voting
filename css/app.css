@@ -9,27 +9,28 @@
 
 /* ── Design tokens ───────────────────────────────────────────────────────── */
 :root {
-  /* paper & ink — cleaner near-white, modern not "antique paper" */
-  --paper:     #EFEEEA;   /* page bg: neutral with a whisper of warmth */
-  --paper-2:   #FCFCFA;   /* panel surfaces: near-white */
-  --paper-3:   #E3E1DA;   /* recessed / hover */
-  --ink:       #101935;
-  --ink-2:     #2C3656;
-  --ink-3:     #6B6C71;
-  --rule:      #B8B7B0;
-  --rule-soft: #D9D7D0;
+  /* paper & ink — clean, modern, near-white */
+  --paper:     #F5F5F3;   /* page bg: stone-100 (cleaner, less warm) */
+  --paper-2:   #FFFFFF;   /* panel surfaces: pure white */
+  --paper-3:   #E7E5E2;   /* recessed / hover */
+  --ink:       #0F172A;   /* slate-900 — deep, crisp navy-black */
+  --ink-2:     #334155;   /* slate-700 */
+  --ink-3:     #64748B;   /* slate-500 */
+  --rule:      #D6D3D1;   /* stone-300 — neutral hairline */
+  --rule-soft: #E7E5E4;   /* stone-200 */
 
-  /* accents */
-  --red:      #C9304A;
-  --red-d:    #962238;
-  --red-bg:   #F5DCE1;
-  --gold:     #D6BE85;       /* reserved for alternate-round identity only */
-  --gold-d:   #927846;
-  --amber:    #EDD79E;
-  --amber-d:  #9B7224;
-  --green:    #4F8A38;
-  --green-d:  #356420;
-  --green-bg: #DEE9CC;
+  /* accents — vivid and modern, no muted/bronze tones */
+  --red:      #DC2626;   /* red-600: bold cherry red */
+  --red-d:    #991B1B;   /* red-800 */
+  --red-bg:   #FEE2E2;   /* red-100 wash */
+  --green:    #16A34A;   /* green-600: pop grass green */
+  --green-d:  #15803D;   /* green-700 */
+  --green-bg: #DCFCE7;   /* green-100 wash */
+  --gold:     #F59E0B;   /* amber-500: bright amber — alternate-round identity */
+  --gold-d:   #B45309;   /* amber-700 */
+  --gold-bg:  #FEF3C7;   /* amber-100 — soft wash for alternate-locked rows */
+  --amber:    #FCD34D;   /* amber-300 — tied at cutoff */
+  --amber-d:  #B45309;   /* amber-700 */
 
   /* legacy aliases — every existing rule keeps working under the new palette */
   --bg:            var(--paper);
@@ -499,7 +500,7 @@ p  { margin: 0 0 8px; }
 }
 .ballot-cell.locked .ballot-cell-name { color: var(--locked-txt); }
 .ballot-cell.locked.alt {
-  background: linear-gradient(to right, var(--amber-d) 0 4px, var(--amber) 4px);
+  background: linear-gradient(to right, var(--gold) 0 4px, var(--gold-bg) 4px);
 }
 .ballot-cell.locked.alt .ballot-cell-name { color: var(--ink); }
 .ballot-cell.submitted:not(.checked):not(.ranked) { opacity: .6; cursor: default; font-style: italic; }
