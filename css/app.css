@@ -1335,10 +1335,10 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
 @media (max-width: 420px) {
   .page-h h2 { font-size: 22px; }
   .counter-value { font-size: 30px; }
-  .brand { font-size: 0; }
-  .brand .brand-icon { font-size: 22px; }
-  .brand-icon { margin: 0; }
   .topbar-inner { padding: 0 10px; gap: 6px; }
+  /* Compact brand: icon + word, both visible but small */
+  .brand { font-size: 14px; gap: 4px; margin-right: 6px; }
+  .brand .brand-icon { font-size: 18px; }
   #topbar-actions .btn { padding: 5px 9px; font-size: 11px; }
   /* The status pill (active/setup/etc.) is on the dashboard already — drop it from the topbar at narrow widths */
   #topbar-context .pill { display: none; }
