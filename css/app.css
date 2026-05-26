@@ -379,6 +379,7 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 .tbl tr.inactive { color: var(--text3); }
 .tbl.tally tr.row-locked  { background: var(--winner-bg); }
 .tbl.tally tr.row-tied    { background: var(--tied-bg); }
+.tbl.tally .tally-action  { width: 1%; white-space: nowrap; text-align: right; }
 .tbl.tally tr.row-prior-locked { opacity: .55; }
 .tbl.tally .votes { font-weight: 700; font-size: 15px; }
 

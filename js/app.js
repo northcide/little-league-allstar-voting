@@ -937,6 +937,7 @@
               h('th', {}, 'Jersey'),
               h('th', {}, 'Votes'),
               h('th', {}, 'Status'),
+              h('th', {}, ''),
             )),
             h('tbody', {}, ...sortedIds.map(pid => {
               const p = players.find(pl => pl.id === pid) || { name: `#${pid}`, jersey: null };
@@ -951,9 +952,31 @@
                   : isTied ? h('span', { class: 'pill pill-warn' }, '⚖ tied at cutoff')
                   : null,
                 ),
+                h('td', { class: 'tally-action' },
+                  isTied ? h('button', {
+                    class: 'btn btn-sm btn-primary',
+                    onclick: () => lockTiedPlayer(p, lastRn),
+                  }, `Lock in for Round ${lastRn}`) : null,
+                ),
               );
             }))
           ),
+    );
+  }
+
+  function lockTiedPlayer(p, roundNum) {
+    confirmDialog(
+      `Lock in ${p.name}?`,
+      `This will add ${p.name} to the locked roster for Round ${roundNum}. ` +
+      `It bypasses the tie at cutoff — other tied players from that round will stay unlocked unless you lock them in separately.`,
+      async () => {
+        try {
+          await api('rounds', 'manual_lock', { player_id: p.id, round_num: roundNum });
+          pollOnce();
+          toast(`${p.name} locked into Round ${roundNum}.`, 'success');
+        } catch (e) { toast(e.message, 'error'); }
+      },
+      `Lock in for Round ${roundNum}`,
     );
   }
 
