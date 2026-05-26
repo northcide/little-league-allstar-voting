@@ -9,27 +9,27 @@
 
 /* ── Design tokens ───────────────────────────────────────────────────────── */
 :root {
-  /* paper & ink */
-  --paper:     #F4EFE3;
-  --paper-2:   #FAF6EC;
-  --paper-3:   #EFE7D2;
+  /* paper & ink — cool newsprint, panels pop as cleaner near-white */
+  --paper:     #E9E7DF;   /* page bg: warm-neutral off-white (was too yellow) */
+  --paper-2:   #FAF9F3;   /* panel surfaces: crisp newsprint */
+  --paper-3:   #D8D5C7;   /* recessed / hover */
   --ink:       #0F1B33;
   --ink-2:     #2A3654;
-  --ink-3:     #7A6F58;
-  --rule:      #D9CFB7;
-  --rule-soft: #E4DCC6;
+  --ink-3:     #6D6857;
+  --rule:      #BDB7A4;
+  --rule-soft: #D5D0BD;
 
-  /* accents */
-  --red:      #C8364B;
-  --red-d:    #A52638;
-  --red-bg:   #F7E1E4;
-  --gold:     #E8D6B0;
-  --gold-d:   #BFA468;
-  --amber:    #F1DA9E;
-  --amber-d:  #B8862A;
-  --green:    #5C8A3A;
-  --green-d:  #436628;
-  --green-bg: #E4ECCF;
+  /* accents — slightly less saturated, less "antique" */
+  --red:      #C03048;
+  --red-d:    #94223A;
+  --red-bg:   #F4DDE2;
+  --gold:     #E2D2A6;
+  --gold-d:   #A88E54;
+  --amber:    #ECD5A0;
+  --amber-d:  #9D7220;
+  --green:    #5A8438;
+  --green-d:  #3E6122;
+  --green-bg: #E0E9CA;
 
   /* legacy aliases — every existing rule keeps working under the new palette */
   --bg:            var(--paper);
@@ -708,37 +708,32 @@ p  { margin: 0 0 8px; }
   text-transform: uppercase;
 }
 
-/* ── Roster panel with rotated section captions on the left margin ───────── */
-.roster-panel { padding: 18px 22px 22px 64px; position: relative; }
+/* ── Roster panel ────────────────────────────────────────────────────────── */
+.roster-panel { padding: 18px 22px 22px; }
 .roster-panel h3 {
   font-family: var(--ff-display);
   font-weight: 800;
   font-size: 17px;
   letter-spacing: .04em;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   color: var(--ink);
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--ink);
 }
 .roster-section {
-  position: relative;
-  padding: 10px 0 14px;
+  padding: 12px 0 14px;
   border-bottom: 1px dashed var(--rule);
 }
-.roster-section:last-child { border-bottom: 0; }
+.roster-section:last-child { border-bottom: 0; padding-bottom: 0; }
 .roster-section h4 {
-  position: absolute;
-  left: -52px; top: 14px;
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  transform-origin: center;
   font-family: var(--ff-display);
   font-weight: 700;
   font-size: 11px;
-  letter-spacing: .25em;
+  letter-spacing: .14em;
   text-transform: uppercase;
   color: var(--ink-3);
-  margin: 0;
-  white-space: nowrap;
+  margin: 0 0 8px;
 }
 .roster-section.alt-section h4 { color: var(--amber-d); }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1146,11 +1141,18 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
 }
 .alt-cand-row {
   display: flex; align-items: center; gap: 8px;
-  padding: 5px 8px;
+  padding: 6px 10px;
   border-radius: var(--radius);
   cursor: pointer;
   border-left: 3px solid transparent;
-  font-size: 13px;
+  /* Reset cascade from `.modal label` — this <label> wraps a list row, not a form label */
+  font-family: var(--ff-serif);
+  font-size: 14px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--ink);
+  margin: 0;
 }
 .alt-cand-row:hover { background: var(--paper-3); }
 .alt-cand-row.checked { background: var(--red-bg); border-left-color: var(--red); }
@@ -1284,15 +1286,8 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
   .side-nav { flex-direction: row; overflow-x: auto; position: static; padding: 6px; }
   .nav-item { flex-shrink: 0; padding: 8px 12px; }
 
-  /* Roster captions return to normal flow */
+  /* Roster panel — tighter on mobile */
   .roster-panel { padding: 14px 16px; }
-  .roster-section h4 {
-    position: static;
-    writing-mode: initial;
-    transform: none;
-    margin-bottom: 6px;
-  }
-  .roster-section { padding-left: 0; }
 
   /* Round cards: round number sits inline (no negative pull) */
   .round-card-h { padding: 12px 14px; }
