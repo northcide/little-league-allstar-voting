@@ -17,6 +17,7 @@
     view: 'login',
     adminSubview: 'dashboard',  // dashboard | setup | codes | results | overrides | audit
     roundOverride: new Map(),   // round_num → bool (true=expanded, false=collapsed). Absent → default
+    lastMaxRoundNum: 0,         // for auto-resetting roundOverride when a new round appears
   };
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
@@ -801,6 +802,15 @@
     const e = s.election;
     const cr = s.current_round;
     const counts = s.counts || {};
+
+    // Reset round-card expand/collapse overrides whenever a new round appears
+    // (or the most-recent round_num changes). Keeps focus on the most recent round.
+    const rounds = s.rounds || [];
+    const maxRn = rounds.length ? Math.max(...rounds.map(r => r.round_num)) : 0;
+    if (maxRn !== S.lastMaxRoundNum) {
+      S.roundOverride.clear();
+      S.lastMaxRoundNum = maxRn;
+    }
     // Build through h() so null children are filtered instead of stringified to "null".
     return h('div', {},
       h('div', { class: 'page-h' },
@@ -845,10 +855,11 @@
       ),
 
       // Rounds — every round shown as a collapsible card, newest first.
-      // Defaults: current/active rounds expanded; finalized rounds collapsed.
-      ((s.rounds || []).length === 0)
+      // Default: only the most-recent round is expanded; older rounds collapsed.
+      // User clicks override per-round; the override is cleared whenever a new round appears.
+      (rounds.length === 0)
         ? h('div', { class: 'panel' }, h('div', { class: 'muted' }, 'No round yet — start the next round to open voting.'))
-        : h('div', {}, ...(s.rounds || []).slice().reverse().map(r => renderRoundCard(s, r))),
+        : h('div', {}, ...rounds.slice().reverse().map(r => renderRoundCard(s, r))),
 
       // Codes status compact
       h('div', { class: 'panel' },
@@ -900,7 +911,9 @@
   // finalized rounds collapsed (user clicks override the default).
   function renderRoundCard(s, round) {
     const rn = round.round_num;
-    const defaultOpen = round.state !== 'finalized';
+    // Default: only the highest round_num is expanded — focus on the most
+    // recent round regardless of whether it's active or freshly finalized.
+    const defaultOpen = rn === S.lastMaxRoundNum;
     const isOpen = S.roundOverride.has(rn) ? S.roundOverride.get(rn) : defaultOpen;
     const tally  = (s.round_tallies && s.round_tallies[rn]) || {};
     const tiedSet   = new Set((s.round_tied_ids && s.round_tied_ids[rn]) || []);
