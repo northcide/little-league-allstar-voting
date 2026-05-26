@@ -511,15 +511,34 @@ p  { margin: 0 0 8px; }
 .ballot-cell.checked .ballot-cell-name,
 .ballot-cell.ranked  .ballot-cell-name { color: var(--red-d); }
 .ballot-cell.locked {
-  background: linear-gradient(to right, var(--gold) 0 4px, var(--paper-2) 4px);
-  color: var(--locked-txt);
+  background:
+    linear-gradient(to right, var(--gold-d) 0 5px, transparent 5px),
+    rgba(15, 27, 51, .065);
   cursor: not-allowed;
 }
-.ballot-cell.locked .ballot-cell-name { color: var(--locked-txt); }
-.ballot-cell.locked.alt {
-  background: linear-gradient(to right, var(--gold) 0 4px, var(--gold-bg) 4px);
+.ballot-cell.locked .ballot-cell-num {
+  color: var(--ink-3);
+  opacity: .55;
 }
-.ballot-cell.locked.alt .ballot-cell-name { color: var(--ink); }
+.ballot-cell.locked .ballot-cell-name {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: rgba(15, 27, 51, .35);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 2px;
+}
+.ballot-cell.locked .ballot-cell-jersey { opacity: .55; }
+.ballot-cell.locked.alt {
+  background:
+    linear-gradient(to right, var(--gold-d) 0 5px, transparent 5px),
+    var(--gold-bg);
+}
+.ballot-cell.locked.alt .ballot-cell-name {
+  color: var(--ink);
+  text-decoration: none;
+}
+.ballot-cell.locked.alt .ballot-cell-num,
+.ballot-cell.locked.alt .ballot-cell-jersey { color: var(--ink-2); opacity: 1; }
 .ballot-cell.submitted:not(.checked):not(.ranked) { opacity: .6; cursor: default; font-style: italic; }
 .ballot-cell.submitted.checked, .ballot-cell.submitted.ranked { cursor: default; opacity: 1; }
 .ballot-grid.readonly .ballot-cell { cursor: default; }
