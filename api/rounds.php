@@ -137,7 +137,8 @@ try {
                     $slotsLeft = $picksToLock - count($aboveCutoff);
                     if ($slotsLeft > 0 && count($atCutoff) > $slotsLeft) {
                         $hasTie = 1;
-                        $tieIds = array_map(fn($r) => (int)$r['player_id'], $atCutoff);
+                        // array_filter preserves keys → re-index so json_encode produces a JSON array, not an object
+                        $tieIds = array_values(array_map(fn($r) => (int)$r['player_id'], $atCutoff));
                         // Lock only the unambiguous winners (above cutoff); tied players await tiebreak
                         $winnerIds = array_map(fn($r) => (int)$r['player_id'], $aboveCutoff);
                     } else {

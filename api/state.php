@@ -53,7 +53,8 @@ try {
         $roundTiedIds = [];
         foreach ($teStmt->fetchAll() as $row) {
             $ids = json_decode($row['tie_player_ids_json'] ?? 'null', true) ?: [];
-            $roundTiedIds[(int)$row['round_num']] = array_map('intval', $ids);
+            // Re-index in case older finalized rounds stored non-sequential keys
+            $roundTiedIds[(int)$row['round_num']] = array_values(array_map('intval', $ids));
         }
 
         $resp = [
@@ -93,7 +94,7 @@ try {
                 $win = $db->prepare("SELECT player_id FROM locked_roster WHERE election_id=? AND locked_in_round=?");
                 $win->execute([$eid, (int)$round['round_num']]);
                 $resp['round']['winners'] = array_map(fn($r) => (int)$r['player_id'], $win->fetchAll());
-                $resp['round']['tie_player_ids'] = json_decode($round['tie_player_ids_json'] ?? 'null', true) ?: [];
+                $resp['round']['tie_player_ids'] = array_values(json_decode($round['tie_player_ids_json'] ?? 'null', true) ?: []);
             }
 
             if ($subRow) {
@@ -149,7 +150,7 @@ try {
         $currentRound = null;
         $allRounds = [];
         foreach ($rounds->fetchAll() as $r) {
-            $r['tie_player_ids'] = json_decode($r['tie_player_ids_json'] ?? 'null', true) ?: [];
+            $r['tie_player_ids'] = array_values(json_decode($r['tie_player_ids_json'] ?? 'null', true) ?: []);
             unset($r['tie_player_ids_json']);
             $allRounds[] = $r;
             if (in_array($r['state'], ['active','all_submitted','finalized'], true)) {
@@ -212,7 +213,7 @@ try {
         $roundTiedIds = [];
         foreach ($teStmt->fetchAll() as $row) {
             $ids = json_decode($row['tie_player_ids_json'] ?? 'null', true) ?: [];
-            $roundTiedIds[(int)$row['round_num']] = array_map('intval', $ids);
+            $roundTiedIds[(int)$row['round_num']] = array_values(array_map('intval', $ids));
         }
 
         $resp['election'] = $e;
