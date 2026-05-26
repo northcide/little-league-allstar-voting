@@ -82,13 +82,14 @@
 html {
   -webkit-text-size-adjust: 100%;   /* iOS Safari: don't auto-scale text */
   text-size-adjust: 100%;
+  overflow-x: hidden;               /* root-level clamp — html is the viewport scroll container */
+  width: 100%;
 }
-html, body {
-  margin: 0;
-  padding: 0;
-  overflow-x: clip;                 /* belt-and-braces against any element pushing layout beyond viewport */
+html, body { margin: 0; padding: 0; }
+body {
+  width: 100%;
+  position: relative;
 }
-body { width: 100%; }
 body {
   font-family: var(--ff-serif);
   font-size: 15px;
@@ -1325,6 +1326,12 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
      can NEVER push beyond the viewport — what triggers iOS auto-zoom. */
   #topbar { max-width: 100vw; overflow: hidden; }
   .topbar-inner { padding: 0 12px; gap: 8px; max-width: 100%; overflow: hidden; }
+
+  /* Drop the 3px right-side offset shadow on primary buttons — at the right edge
+     of the viewport it adds 3px of paint outside the button box that some iOS
+     layouts have counted toward content width, triggering the auto-zoom-out. */
+  .btn-primary, .btn-success, .btn-warning, .btn-danger { box-shadow: none; }
+  .btn-primary:hover, .btn-success:hover, .btn-warning:hover, .btn-danger:hover { transform: none; box-shadow: none; }
   .brand { border-right: 0; padding-right: 0; margin-right: 8px; font-size: 18px; flex-shrink: 0; }
   #topbar-context { border-left: 0; padding-left: 0; min-width: 0; gap: 6px; font-size: 13px; flex-wrap: nowrap; overflow: hidden; }
   /* League name is redundant with the domain on mobile — hide it (and its trailing separator) */
