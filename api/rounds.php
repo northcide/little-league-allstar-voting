@@ -85,10 +85,10 @@ try {
         $ptl  = (int)($in['picks_to_lock']   ?? 0);
         $cand = $in['candidate_ids'] ?? [];
         if (!is_array($cand) || count($cand) < 2) jsonError('Pick at least 2 candidates for an alternate round');
-        if ($ppc < 1 || $ptl < 1) jsonError('Alternates count must be ≥1');
-        if ($ptl > count($cand))  jsonError('Cannot lock more alternates than candidates provided');
-        // For alternates we enforce ppc == ptl — every ranked position becomes a slot
-        if ($ppc !== $ptl) $ppc = $ptl;
+        if ($ppc < 1)            jsonError('Picks per coach must be ≥1');
+        if ($ptl < 1)            jsonError('Alternates to lock must be ≥1');
+        if ($ptl > $ppc)         jsonError('Cannot lock more alternates than each coach ranks');
+        if ($ppc > count($cand)) jsonError('Each coach can\'t rank more players than the number of candidates');
 
         $db->beginTransaction();
         try {

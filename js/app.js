@@ -1634,7 +1634,15 @@
       : Math.min(3, allActive.length);
 
     const overlay = h('div', { class: 'overlay' });
-    const slotsIn = h('input', { type: 'number', min: 1, value: defaultSlots });
+    const slotsIn   = h('input', { type: 'number', min: 1, value: defaultSlots });
+    const ppcIn     = h('input', { type: 'number', min: 1, value: defaultSlots });
+    // Default ppc to match slots; if admin bumps slots later, follow it unless they've manually changed ppc
+    let ppcTouched = false;
+    ppcIn.addEventListener('input', () => { ppcTouched = true; });
+    slotsIn.addEventListener('input', () => {
+      const v = parseInt(slotsIn.value, 10);
+      if (!ppcTouched && v >= 1) ppcIn.value = v;
+    });
     const candList = h('div', { class: 'alt-cand-list' });
     const selectedCountEl = h('span', { class: 'alt-cand-count' }, '');
     const selected = new Set();
@@ -1704,13 +1712,16 @@
 
     const submit = async () => {
       const slots = parseInt(slotsIn.value, 10);
-      if (!(slots >= 1)) { toast('Alternates count must be ≥ 1', 'error'); return; }
+      const ppc   = parseInt(ppcIn.value, 10);
+      if (!(slots >= 1)) { toast('Alternates to lock must be ≥ 1', 'error'); return; }
+      if (!(ppc >= 1))   { toast('Picks per coach must be ≥ 1', 'error'); return; }
+      if (slots > ppc)   { toast(`Can't lock more alternates (${slots}) than each coach ranks (${ppc})`, 'error'); return; }
       const candidate_ids = [...selected];
       if (candidate_ids.length < 2) { toast('Pick at least 2 candidates', 'error'); return; }
-      if (slots > candidate_ids.length) { toast(`Can't lock ${slots} alternates with only ${candidate_ids.length} candidates`, 'error'); return; }
+      if (ppc > candidate_ids.length) { toast(`Coaches can't rank ${ppc} players from only ${candidate_ids.length} candidates`, 'error'); return; }
       try {
         const r = await api('rounds', 'start_alternate', {
-          picks_per_coach: slots,
+          picks_per_coach: ppc,
           picks_to_lock: slots,
           candidate_ids,
         });
@@ -1726,8 +1737,10 @@
         ? `The previous alternate round had a tie at cutoff. Coaches will re-rank the tied players to break it — you can also add other candidates if you want.`
         : `Coaches will rank the chosen candidates. The top players by Borda count become alternates in that order.`),
       h('div', { class: 'form-grid' },
+        h('label', {}, 'Picks per coach'), ppcIn,
         h('label', {}, 'Alternates to lock in'), slotsIn,
       ),
+      h('p', { class: 'micro' }, 'Each coach ranks "Picks per coach" players. The top "Alternates to lock in" by Borda count become alternates in that order. Picks per coach ≥ Alternates to lock in.'),
       h('div', { class: 'sep' }, `Candidates (${allActive.length} available)`),
       h('p', { class: 'muted', style: { marginTop: '4px' } },
         isTieResolution
