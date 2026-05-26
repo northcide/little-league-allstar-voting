@@ -355,20 +355,15 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background
 
 /* Codes page detail list */
 .gen-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.gen-input { display: flex; gap: 8px; align-items: center; }
-.gen-input input { width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 14px; }
-.codes-print { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
-.code-print-row {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 12px; background: var(--bg3); border-radius: var(--radius-sm);
-  border-left: 4px solid var(--border);
-}
-.code-print-row.code-unclaimed { background: #fafafa; }
-.code-print-row.code-claimed   { border-left-color: #93c5fd; }
-.code-print-row.code-logged_in { border-left-color: var(--pink); }
-.code-print-row.code-submitted { border-left-color: var(--winner-border); background: var(--winner-bg); }
-.code-print-row.code-revoked   { opacity: .6; }
-.code-print-word { font-family: 'JetBrains Mono', ui-monospace, Menlo, monospace; font-weight: 700; flex: 1; font-size: 14px; }
+/* Signed-In coaches table */
+.signed-in-tbl .col-num    { width: 90px; font-weight: 700; }
+.signed-in-tbl .col-action { width: 1%; white-space: nowrap; text-align: right; }
+.signed-in-tbl tr.row-active  { }
+.signed-in-tbl tr.row-idle    { color: var(--text2); }
+.signed-in-tbl tr.row-revoked { color: var(--text3); background: #f9fafb; }
+.signed-in-tbl tr.row-revoked .col-num { text-decoration: line-through; }
+.tag-yes   { color: #166534; font-weight: 700; }
+.tag-fresh { color: #166534; font-weight: 600; }
 
 /* Tables */
 .tbl { width: 100%; border-collapse: collapse; }

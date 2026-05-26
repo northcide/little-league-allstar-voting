@@ -1016,27 +1016,66 @@
   // ── Admin: Signed In coaches ──────────────────────────────────────────────
   function renderAdminCodes() {
     const s = S.state;
-    const codes = s.codes || [];
+    const codes = (s.codes || []).slice().sort((a, b) => (+a.word) - (+b.word));
+    const cr = s.current_round;
     const wrap = h('div', {});
-    wrap.append(
-      h('div', { class: 'page-h' },
-        h('h2', {}, `Signed In (${codes.length})`),
-      ),
-      codes.length
-        ? h('div', { class: 'panel' },
-            h('div', { class: 'codes-print' },
-              ...codes.map(c => h('div', { class: `code-print-row code-${c.status}` },
-                h('span', { class: 'code-print-word' }, `Coach #${c.word}`),
-                h('span', { class: `pill pill-${c.status}` }, c.status.replace('_', ' ')),
-                !c.revoked
-                  ? h('button', { class: 'btn btn-sm btn-danger-outline', onclick: () => revokeCode(c.id, c.word) }, 'Revoke')
-                  : h('button', { class: 'btn btn-sm btn-secondary', onclick: () => unrevokeCode(c.id) }, 'Un-revoke'),
-              ))
-            ),
-          )
-        : h('div', { class: 'panel' }, h('div', { class: 'muted' }, 'No coaches have signed in yet. Share the election URL and password with your coaches.')),
-    );
+    wrap.append(h('div', { class: 'page-h' }, h('h2', {}, `Signed In (${codes.length})`)));
+
+    if (!codes.length) {
+      wrap.append(h('div', { class: 'panel' }, h('div', { class: 'muted' },
+        'No coaches have signed in yet. Share the election URL and password with your coaches.')));
+      return wrap;
+    }
+
+    const rows = codes.map(c => {
+      const presence = c.revoked ? 'revoked'
+                     : c.logged_in ? 'active'
+                     : 'idle';
+      const presenceLabel = { active: '🟢 Active', idle: '⚪ Idle', revoked: '🔴 Revoked' }[presence];
+      const submittedCell = c.revoked
+        ? h('span', { class: 'muted' }, '—')
+        : c.submitted
+          ? h('span', { class: 'tag-yes' }, '✓ Yes')
+          : h('span', { class: 'muted' }, '— Not yet');
+      const lastSeenCell = h('span', { class: c.logged_in ? 'tag-fresh' : 'muted' }, relativeTime(c.last_seen_at));
+      const actionCell = c.revoked
+        ? h('button', { class: 'btn btn-sm btn-secondary', onclick: () => unrevokeCode(c.id) }, 'Un-revoke')
+        : h('button', { class: 'btn btn-sm btn-danger-outline', onclick: () => revokeCode(c.id, c.word) }, 'Revoke');
+      return h('tr', { class: `row-${presence}` },
+        h('td', { class: 'col-num' }, `#${c.word}`),
+        h('td', {}, presenceLabel),
+        h('td', {}, submittedCell),
+        h('td', {}, lastSeenCell),
+        h('td', { class: 'col-action' }, actionCell),
+      );
+    });
+
+    wrap.append(h('div', { class: 'panel' },
+      h('table', { class: 'tbl signed-in-tbl' },
+        h('thead', {}, h('tr', {},
+          h('th', { class: 'col-num' }, 'Coach'),
+          h('th', {}, 'Status'),
+          h('th', {}, cr ? `Submitted Round ${cr.round_num}` : 'Submitted'),
+          h('th', {}, 'Last seen'),
+          h('th', { class: 'col-action' }, ''),
+        )),
+        h('tbody', {}, ...rows),
+      )
+    ));
     return wrap;
+  }
+
+  // Relative time: "12s ago", "5m ago", "2h ago", "—" if null. Compares against now() each render.
+  function relativeTime(ts) {
+    if (!ts) return '—';
+    const t = typeof ts === 'string' ? new Date(ts.replace(' ', 'T') + 'Z').getTime() : new Date(ts).getTime();
+    if (!t || isNaN(t)) return '—';
+    const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+    if (sec < 5)    return 'just now';
+    if (sec < 60)   return `${sec}s ago`;
+    if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
+    if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
+    return `${Math.floor(sec / 86400)}d ago`;
   }
 
   function revokeCode(id, word) {
