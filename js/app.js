@@ -21,7 +21,27 @@
     lastMaxRoundNum: 0,         // tracks the highest round_num seen
     lastFocusKey: '',           // "<round_num>:<state>" of the latest round — reset overrides when this changes
     lastStateSig: '',           // signature of last rendered state — skip re-render when unchanged
+    viewportNudgePending: false, // iOS layout-viewport recompute needed after next render
   };
+
+  // iOS Safari/Edge sometimes locks in a too-narrow layout viewport when an SPA
+  // swaps in a denser post-login view via JS — content renders zoomed-in until
+  // the user pinches. Forcing a brief viewport-meta change makes iOS re-measure
+  // the layout viewport against the current content.
+  function nudgeIosViewport() {
+    const ua = navigator.userAgent || '';
+    const isIos = /iP(hone|ad|od)/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!isIos) return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    const original = meta.getAttribute('content');
+    // Step the initial-scale fractionally to force WebKit to recompute. The
+    // restoration happens on the next animation frame after layout has settled.
+    meta.setAttribute('content', 'width=device-width, initial-scale=0.9999, minimum-scale=1, viewport-fit=cover');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => meta.setAttribute('content', original));
+    });
+  }
 
   // ── DOM helpers ────────────────────────────────────────────────────────────
   const $ = (sel, parent = document) => parent.querySelector(sel);
@@ -177,12 +197,14 @@
     if (!S.csrf) { const r = await api('auth', 'check'); S.csrf = r.csrf_token; S.leagueName = r.league_name; }
     const r = await api('auth', 'admin_login', { pin });
     S.csrf = r.csrf_token; S.role = 'admin';
+    S.viewportNudgePending = true;
     await startPolling();
   }
   async function coachLogin(vote_code, password) {
     if (!S.csrf) { const r = await api('auth', 'check'); S.csrf = r.csrf_token; S.leagueName = r.league_name; }
     const r = await api('auth', 'coach_login', { vote_code, password });
     S.csrf = r.csrf_token; S.role = 'coach';
+    S.viewportNudgePending = true;
     await startPolling();
   }
   async function logout() {
@@ -197,8 +219,12 @@
     renderTopbar();
     const main = $('#main');
     if (!S.role) { mount(main, renderLogin()); return; }
-    if (S.role === 'admin') { mount(main, renderAdmin()); return; }
-    if (S.role === 'coach') { mount(main, renderCoach()); return; }
+    if (S.role === 'admin') mount(main, renderAdmin());
+    else if (S.role === 'coach') mount(main, renderCoach());
+    if (S.viewportNudgePending) {
+      S.viewportNudgePending = false;
+      nudgeIosViewport();
+    }
   }
 
   function renderTopbar() {
