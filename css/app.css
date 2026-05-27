@@ -1326,6 +1326,13 @@ input[disabled] { background: var(--paper-3); color: var(--ink-3); }
 /* ── Mobile (≤800px) ─────────────────────────────────────────────────────── */
 @media (max-width: 800px) {
   body { font-size: 14.5px; }
+  /* iOS auto-zooms on focus into any form control with computed font-size < 16px.
+     Since this is an SPA, that zoom never resets via navigation — so force every
+     input/select/textarea to 16px on mobile to suppress the auto-zoom entirely. */
+  input, select, textarea,
+  .modal input, .modal select,
+  .alt-modal .alt-form input,
+  .rounds-edit-row input { font-size: 16px; }
   #main { margin: 0 auto; padding: 16px 14px 90px; }
   .page-h { flex-direction: column; align-items: flex-start; gap: 8px; padding-bottom: 10px; margin-bottom: 18px; }
   .page-h h2 { font-size: 28px; }
