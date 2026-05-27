@@ -326,7 +326,17 @@
         const params = new URLSearchParams(window.location.search);
         const presetCode = (params.get('e') || '').trim().toLowerCase();
 
-        const pw  = h('input', { type: 'password', placeholder: 'shared coach password', autocomplete: 'off' });
+        const pw  = h('input', {
+          type: 'password',
+          placeholder: 'shared coach password',
+          autocomplete: 'off',
+          inputmode: 'numeric',
+          pattern: '[0-9]*',
+        });
+        pw.addEventListener('input', () => {
+          const cleaned = pw.value.replace(/\D+/g, '');
+          if (cleaned !== pw.value) pw.value = cleaned;
+        });
         const btn = h('button', { class: 'btn btn-primary btn-block' }, 'Enter Vote');
 
         if (presetCode) {
